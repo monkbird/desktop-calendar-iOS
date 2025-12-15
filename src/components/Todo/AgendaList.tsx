@@ -1,13 +1,13 @@
 import { CheckCircle2, Circle, Plus, Trash2 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { Todo } from '../../types';
 

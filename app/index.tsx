@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { View, ImageBackground, StatusBar } from 'react-native';
 import { BlurView } from 'expo-blur';
+import React, { useMemo, useState } from 'react';
+import { ImageBackground, StatusBar, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CalendarWidget from '../src/components/Calendar/CalendarWidget';
 import AgendaList from '../src/components/Todo/AgendaList';

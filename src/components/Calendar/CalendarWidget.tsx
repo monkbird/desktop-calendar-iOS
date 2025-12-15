@@ -1,13 +1,17 @@
-import React, { useState, useRef, useMemo, useCallback } from 'react';
-import { View, Text, TouchableOpacity, Modal, FlatList } from 'react-native';
-import { Calendar, toDateId, CalendarFormat } from '@marceloterreiro/flash-calendar';
-import { BlurView } from 'expo-blur';
-import { ChevronLeft, ChevronRight, RotateCcw, Calendar as CalendarIcon, Rows } from 'lucide-react-native';
-import { CalendarCell } from './CalendarCell';
-import { formatDateKey } from '../../utils';
-import { Todo } from '../../types';
+import {
+  toDateId,
+  useCalendar,
+  type CalendarActiveDateRange
+} from '@marceloterreiro/flash-calendar';
 import clsx from 'clsx';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw, Rows } from 'lucide-react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { FlatList, Modal, Text, TouchableOpacity, View } from 'react-native';
+import { Todo } from '../../types';
+import { formatDateKey } from '../../utils';
+import { CalendarCell } from './CalendarCell';
 
 interface CalendarWidgetProps {
   todos: Todo[];
@@ -25,9 +29,7 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect }: Ca
   const [showYearPicker, setShowYearPicker] = useState(false);
   
   // 1. 新增：视图模式切换 (月视图/周视图)
-  const [calendarFormat, setCalendarFormat] = useState<CalendarFormat>('month');
-
-  const calendarRef = useRef<any>(null);
+  const [calendarFormat, setCalendarFormat] = useState<'month' | 'week'>('month');
 
   // 2. 性能优化：缓存 Todos Map
   const todosMap = useMemo(() => {
@@ -40,10 +42,18 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect }: Ca
   }, [todos]);
 
   // 3. 性能优化：缓存选中范围对象，避免重复创建导致重渲染
-  const activeDateRanges = useMemo(() => [{
-    startId: toDateId(selectedDate),
-    endId: toDateId(selectedDate),
-  }], [selectedDate]);
+  const selectedDateId = useMemo(() => toDateId(selectedDate), [selectedDate]);
+
+  const activeDateRanges = useMemo<CalendarActiveDateRange[]>(() => [{
+    startId: selectedDateId,
+    endId: selectedDateId,
+  }], [selectedDateId]);
+
+  const { weeksList } = useCalendar({
+    calendarMonthId: toDateId(currentDate),
+    calendarFirstDayOfWeek: 'sunday',
+    calendarActiveDateRanges: activeDateRanges
+  });
 
   // 导航逻辑
   const handleNavigate = useCallback((direction: -1 | 1) => {
@@ -150,36 +160,30 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect }: Ca
           ))}
         </View>
 
-        {/* 日历列表 */}
-        <Calendar.List
-          ref={calendarRef}
-          calendarActiveDateRanges={activeDateRanges}
-          calendarMonthId={toDateId(currentDate)}
-          calendarFormat={calendarFormat} // 动态绑定视图模式
-          onCalendarDayPress={onDateSelect}
-          // 4. 自定义渲染优化：只传必要的 Props
-          renderDay={(props) => {
-             const dateObj = new Date(props.day.date);
-             const dateKey = formatDateKey(dateObj);
-             // 仅当 todos 存在时才传递数组，否则传空数组引用
-             const dayTodos = todosMap[dateKey] || [];
-             
-             return (
-               <CalendarCell
+        {weeksList.map((week, rowIndex) => (
+          <View key={rowIndex} className="flex-row">
+            {week.map((day) => {
+              const dateObj = day.date;
+              const dateKey = formatDateKey(dateObj);
+              const dayTodos = todosMap[dateKey] || [];
+
+              return (
+                <CalendarCell
+                  key={day.id}
                   date={dateObj}
-                  isDifferentMonth={props.isDifferentMonth}
-                  isToday={props.isToday}
-                  isSelected={props.isRangeEnd}
-                  onSelect={onDateSelect}
+                  isDifferentMonth={day.isDifferentMonth}
+                  isToday={day.isToday}
+                  isSelected={day.id === selectedDateId}
+                  onSelect={(d) => {
+                    setCurrentDate(d);
+                    onDateSelect(d);
+                  }}
                   todos={dayTodos}
-               />
-             );
-          }}
-          theme={{
-            itemDayContainer: { padding: 0, margin: 0 },
-            rowMonth: { contentContainerStyle: { padding: 0 } }
-          }}
-        />
+                />
+              );
+            })}
+          </View>
+        ))}
       </View>
 
       {/* --- Year Picker Modal (优化版) --- */}

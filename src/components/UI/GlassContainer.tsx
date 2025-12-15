@@ -1,7 +1,7 @@
-import React from 'react';
-import { ViewStyle, View } from 'react-native';
-import { BlurView } from 'expo-blur';
 import clsx from 'clsx';
+import { BlurView } from 'expo-blur';
+import React from 'react';
+import { View, ViewStyle } from 'react-native';
 
 interface GlassContainerProps {
   children: React.ReactNode;
