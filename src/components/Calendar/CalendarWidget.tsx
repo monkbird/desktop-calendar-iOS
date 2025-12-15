@@ -7,8 +7,8 @@ import clsx from 'clsx';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw, Rows } from 'lucide-react-native';
-import React, { useCallback, useMemo, useState } from 'react';
-import { FlatList, Modal, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { FlatList, Modal, PanResponder, Text, TouchableOpacity, View } from 'react-native';
 import { Todo } from '../../types';
 import { formatDateKey } from '../../utils';
 import { CalendarCell } from './CalendarCell';
@@ -81,10 +81,50 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect }: Ca
     setCalendarFormat(prev => prev === 'month' ? 'week' : 'month');
   }, []);
 
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        const { dx, dy } = gestureState;
+        return Math.abs(dy) > 30 && Math.abs(dy) > Math.abs(dx);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const { dy } = gestureState;
+        if (dy <= -50) {
+          handleNavigate(1);
+        } else if (dy >= 50) {
+          handleNavigate(-1);
+        }
+      },
+    })
+  ).current;
+
   return (
-    <View className="flex-1 w-full">
+    <View
+      className="flex-1 w-full"
+      style={{
+        flex: 1,
+        width: '100%',
+        paddingHorizontal: 16,
+        paddingTop: 4,
+      }}
+    >
       {/* --- Header Area --- */}
-      <View className="flex-row justify-between items-center px-4 py-3 border-b border-white/5 bg-white/5">
+      <View
+        className="flex-row justify-between items-center px-4 py-3 border-b border-white/5 bg-white/5"
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          borderBottomWidth: 1,
+          borderBottomColor: 'rgba(255,255,255,0.05)',
+          backgroundColor: 'rgba(255,255,255,0.05)',
+          borderRadius: 16,
+          width: '100%',
+          alignSelf: 'stretch',
+        }}
+      >
         
         {/* 左侧：年月显示 (点击切换年份) */}
         <TouchableOpacity
@@ -93,22 +133,33 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect }: Ca
             setShowYearPicker(true);
           }}
           className="flex-row items-baseline gap-1 active:opacity-70"
+          style={{ flexDirection: 'row', alignItems: 'flex-end' }}
         >
-          <Text className="text-xl font-bold text-white tracking-tight">
+          <Text
+            className="text-xl font-bold text-white tracking-tight"
+            style={{ marginRight: 4 }}
+          >
             {currentDate.getFullYear()}年
           </Text>
-          <Text className="text-lg font-medium text-emerald-400">
+          <Text
+            className="text-lg font-medium text-emerald-400"
+            style={{ marginRight: 4 }}
+          >
             {currentDate.getMonth() + 1}月
           </Text>
           <ChevronRight size={14} className="text-white/30 ml-1 rotate-90" />
         </TouchableOpacity>
 
         {/* 右侧：工具栏 */}
-        <View className="flex-row gap-2 items-center">
+        <View
+          className="flex-row gap-2 items-center"
+          style={{ flexDirection: 'row', alignItems: 'center' }}
+        >
           {/* 视图切换按钮 (月/周) */}
           <TouchableOpacity
             onPress={toggleFormat}
             className="w-8 h-8 items-center justify-center rounded-full bg-white/10"
+            style={{ marginRight: 8 }}
           >
             {calendarFormat === 'month' ? (
               <Rows size={16} color="#cbd5e1" /> // 代表切到周视图的图标
@@ -121,6 +172,7 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect }: Ca
           <TouchableOpacity
             onPress={handleGoToday}
             className="w-8 h-8 items-center justify-center rounded-full bg-white/10"
+            style={{ marginRight: 8 }}
           >
             <RotateCcw size={16} color="#34d399" />
           </TouchableOpacity>
@@ -144,9 +196,20 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect }: Ca
       </View>
 
       {/* --- Calendar Body --- */}
-      <View className="flex-1 px-1 pt-2">
+      <View
+        className="flex-1 px-1 pt-2"
+        style={{ flex: 1, paddingTop: 8 }}
+        {...panResponder.panHandlers}
+      >
         {/* 星期表头 */}
-        <View className="flex-row justify-around mb-2 px-1">
+        <View
+          className="flex-row justify-around mb-2 px-1"
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-around',
+            marginBottom: 8,
+          }}
+        >
           {['日', '一', '二', '三', '四', '五', '六'].map((d, i) => (
             <Text
               key={d}
@@ -161,7 +224,14 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect }: Ca
         </View>
 
         {weeksList.map((week, rowIndex) => (
-          <View key={rowIndex} className="flex-row">
+          <View
+            key={rowIndex}
+            className="flex-row"
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+            }}
+          >
             {week.map((day) => {
               const dateObj = day.date;
               const dateKey = formatDateKey(dateObj);
