@@ -1,12 +1,12 @@
 import {
-  toDateId,
-  useCalendar,
-  type CalendarActiveDateRange
+    toDateId,
+    useCalendar,
+    type CalendarActiveDateRange
 } from '@marceloterreiro/flash-calendar';
 import clsx from 'clsx';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw, Rows } from 'lucide-react-native';
+import { Calendar as CalendarIcon, ChevronRight, RotateCcw, Rows } from 'lucide-react-native';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, PanResponder, Text, TouchableOpacity, View } from 'react-native';
 import { Todo } from '../../types';
@@ -17,6 +17,7 @@ interface CalendarWidgetProps {
   todos: Todo[];
   selectedDate: Date;
   onDateSelect: (d: Date) => void;
+  onDoubleSelect?: (d: Date) => void;
 }
 
 // 动态生成年份列表 (当前年份 前后 10 年)
@@ -24,7 +25,7 @@ const generateYears = (centerYear: number) => {
   return Array.from({ length: 20 }, (_, i) => centerYear - 10 + i);
 };
 
-export default function CalendarWidget({ todos, selectedDate, onDateSelect }: CalendarWidgetProps) {
+export default function CalendarWidget({ todos, selectedDate, onDateSelect, onDoubleSelect }: CalendarWidgetProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showYearPicker, setShowYearPicker] = useState(false);
   
@@ -172,26 +173,10 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect }: Ca
           <TouchableOpacity
             onPress={handleGoToday}
             className="w-8 h-8 items-center justify-center rounded-full bg-white/10"
-            style={{ marginRight: 8 }}
+            style={{ marginRight: 0 }}
           >
             <RotateCcw size={16} color="#34d399" />
           </TouchableOpacity>
-
-          {/* 翻页按钮组 */}
-          <View className="flex-row bg-white/10 rounded-lg overflow-hidden ml-1">
-            <TouchableOpacity
-              onPress={() => handleNavigate(-1)}
-              className="p-1.5 px-3 border-r border-white/10 active:bg-white/20"
-            >
-              <ChevronLeft size={20} color="#cbd5e1" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => handleNavigate(1)}
-              className="p-1.5 px-3 active:bg-white/20"
-            >
-              <ChevronRight size={20} color="#cbd5e1" />
-            </TouchableOpacity>
-          </View>
         </View>
       </View>
 
@@ -248,6 +233,7 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect }: Ca
                     setCurrentDate(d);
                     onDateSelect(d);
                   }}
+                  onDoubleSelect={onDoubleSelect}
                   todos={dayTodos}
                 />
               );

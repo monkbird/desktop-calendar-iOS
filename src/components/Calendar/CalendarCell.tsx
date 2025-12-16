@@ -11,11 +11,12 @@ interface CalendarCellProps {
   isToday: boolean;
   isSelected: boolean;
   onSelect: (date: Date) => void;
+  onDoubleSelect?: (date: Date) => void;
   todos: Todo[];
 }
 
 export const CalendarCell = React.memo(({
-  date, isDifferentMonth, isToday, isSelected, onSelect, todos
+  date, isDifferentMonth, isToday, isSelected, onSelect, onDoubleSelect, todos
 }: CalendarCellProps) => {
   const { lunarText, term, festival, workStatus } = useMemo(() => getDateInfo(date), [date]);
 
@@ -48,9 +49,19 @@ export const CalendarCell = React.memo(({
     return sorted.slice(0, MAX_TODO_DOTS);
   }, [todos]);
 
+  const lastPress = React.useRef(0);
+
   const handlePress = () => {
+    const now = Date.now();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onSelect(date);
+    
+    if (now - lastPress.current < 300) {
+      onDoubleSelect?.(date);
+      lastPress.current = 0;
+    } else {
+      lastPress.current = now;
+      onSelect(date);
+    }
   };
 
   const containerStyle = {

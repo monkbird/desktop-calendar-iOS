@@ -14,7 +14,10 @@ export function useTodos() {
 
   // 1. 初始化加载
   useEffect(() => {
-    loadLocalData();
+    loadLocalData().then(() => {
+        // 加载完成后检查是否需要迁移待办
+        checkAndMigrateTodos();
+    });
     
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -28,6 +31,39 @@ export function useTodos() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // 迁移过期未完成待办到今天
+  const checkAndMigrateTodos = async () => {
+    try {
+        const savedTodosStr = await AsyncStorage.getItem(STORAGE_KEY_TODOS);
+        if (!savedTodosStr) return;
+        
+        const currentTodos: Todo[] = JSON.parse(savedTodosStr);
+        const todayKey = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        
+        let hasChanges = false;
+        const newTodos = currentTodos.map(todo => {
+            if (!todo.completed && todo.targetDate < todayKey) {
+                hasChanges = true;
+                return {
+                    ...todo,
+                    targetDate: todayKey,
+                    updatedAt: Date.now()
+                };
+            }
+            return todo;
+        });
+
+        if (hasChanges) {
+            setTodos(newTodos);
+            // 这里会自动触发 saveLocalData (通过 useEffect [todos])
+            // 如果有同步队列逻辑，也需要考虑是否加入 UPDATE 操作到队列
+            // 为简单起见，这里依赖 useEffect 的自动保存和后续可能的同步
+        }
+    } catch (e) {
+        console.error('Failed to migrate todos', e);
+    }
+  };
 
   // 2. 监听队列和网络，尝试同步
   useEffect(() => {
