@@ -6,7 +6,7 @@ import {
 import clsx from 'clsx';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { Calendar as CalendarIcon, ChevronRight, RotateCcw, Rows } from 'lucide-react-native';
+import { ChevronRight, RotateCcw } from 'lucide-react-native';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, PanResponder, Text, TouchableOpacity, View } from 'react-native';
 import { Todo } from '../../types';
@@ -29,9 +29,6 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect, onDo
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showYearPicker, setShowYearPicker] = useState(false);
   
-  // 1. 新增：视图模式切换 (月视图/周视图)
-  const [calendarFormat, setCalendarFormat] = useState<'month' | 'week'>('month');
-
   // 2. 性能优化：缓存 Todos Map
   const todosMap = useMemo(() => {
     const map: Record<string, Todo[]> = {};
@@ -60,14 +57,9 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect, onDo
   const handleNavigate = useCallback((direction: -1 | 1) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const newDate = new Date(currentDate);
-    
-    if (calendarFormat === 'month') {
-      newDate.setMonth(newDate.getMonth() + direction);
-    } else {
-      newDate.setDate(newDate.getDate() + (direction * 7));
-    }
+    newDate.setMonth(newDate.getMonth() + direction);
     setCurrentDate(newDate);
-  }, [currentDate, calendarFormat]);
+  }, [currentDate]);
 
   const handleGoToday = useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -76,11 +68,6 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect, onDo
     onDateSelect(now);
     // 强制滚动到今天 (如果 FlashCalendar 支持 scrollToDate，可在此调用)
   }, [onDateSelect]);
-
-  const toggleFormat = useCallback(() => {
-    Haptics.selectionAsync();
-    setCalendarFormat(prev => prev === 'month' ? 'week' : 'month');
-  }, []);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -156,19 +143,6 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect, onDo
           className="flex-row gap-2 items-center"
           style={{ flexDirection: 'row', alignItems: 'center' }}
         >
-          {/* 视图切换按钮 (月/周) */}
-          <TouchableOpacity
-            onPress={toggleFormat}
-            className="w-8 h-8 items-center justify-center rounded-full bg-white/10"
-            style={{ marginRight: 8 }}
-          >
-            {calendarFormat === 'month' ? (
-              <Rows size={16} color="#cbd5e1" /> // 代表切到周视图的图标
-            ) : (
-              <CalendarIcon size={16} color="#cbd5e1" /> // 代表切到月视图
-            )}
-          </TouchableOpacity>
-
           {/* 回到今天 */}
           <TouchableOpacity
             onPress={handleGoToday}
