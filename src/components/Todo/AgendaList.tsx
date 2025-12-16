@@ -78,11 +78,12 @@ export default function AgendaList({
                 flex: 1,
                 alignItems: 'center',
                 justifyContent: 'center',
-                paddingVertical: 48
+                paddingVertical: 48,
+                marginTop: 40,
               }}
             >
-              <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)' }}>
-                今天还没有待办，添加一个吧
+              <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.4)' }}>
+                无待办
               </Text>
             </View>
           }

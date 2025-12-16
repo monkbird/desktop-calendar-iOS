@@ -1,9 +1,9 @@
 import { BlurView } from 'expo-blur';
-import React, { useMemo, useState, useEffect } from 'react';
-import { ImageBackground, StatusBar, View, Dimensions, TouchableOpacity, Text } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from 'react-native-reanimated';
 import { ChevronDown } from 'lucide-react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Dimensions, ImageBackground, StatusBar, TouchableOpacity, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import CalendarWidget from '../src/components/Calendar/CalendarWidget';
 import AgendaList from '../src/components/Todo/AgendaList';
 import { useTodos } from '../src/hooks/useTodos';
@@ -11,26 +11,33 @@ import { formatDateKey } from '../src/utils';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 // 估算的顶部高度 (Header + Week row approx offset)
-// 实际可以根据 CalendarWidget 内部布局调整，这里预设一个合理值让它盖住日历部分但露出Header
 const SHEET_TOP_OFFSET = 120; 
+// 底部可见高度 (日历下方区域) - 假设日历占上半部分，这里留出约 45% 的高度给待办列表
+const SHEET_PEEK_HEIGHT = SCREEN_HEIGHT * 0.45;
 
 export default function HomeScreen() {
   const { todos, addTodo, toggleTodo, deleteTodo } = useTodos();
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [isTodoVisible, setIsTodoVisible] = useState(false);
+  // isTodoExpanded 控制是否展开到顶部，默认 false 为底部 peek 模式
+  const [isTodoExpanded, setIsTodoExpanded] = useState(false);
 
-  const translateY = useSharedValue(SCREEN_HEIGHT);
+  const translateY = useSharedValue(SCREEN_HEIGHT - SHEET_PEEK_HEIGHT);
 
   useEffect(() => {
-    if (isTodoVisible) {
+    if (isTodoExpanded) {
+      // 展开到顶部
       translateY.value = withSpring(SHEET_TOP_OFFSET, {
         damping: 20,
         stiffness: 90
       });
     } else {
-      translateY.value = withTiming(SCREEN_HEIGHT, { duration: 300 });
+      // 收缩到底部 (Peek)
+      translateY.value = withSpring(SCREEN_HEIGHT - SHEET_PEEK_HEIGHT, {
+        damping: 20,
+        stiffness: 90
+      });
     }
-  }, [isTodoVisible]);
+  }, [isTodoExpanded]);
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
@@ -65,7 +72,7 @@ export default function HomeScreen() {
                         todos={todos}
                         selectedDate={selectedDate}
                         onDateSelect={setSelectedDate}
-                        onDoubleSelect={() => setIsTodoVisible(true)}
+                        onDoubleSelect={() => setIsTodoExpanded(true)}
                     />
                 </View>
 
@@ -95,10 +102,14 @@ export default function HomeScreen() {
                     {/* 关闭把手/按钮 */}
                     <View className="items-center py-2 bg-white/5 border-b border-white/5">
                         <TouchableOpacity 
-                            onPress={() => setIsTodoVisible(false)}
+                            onPress={() => setIsTodoExpanded(!isTodoExpanded)}
                             className="p-1"
                         >
-                            <ChevronDown size={24} color="#9ca3af" />
+                            {isTodoExpanded ? (
+                                <ChevronDown size={24} color="#9ca3af" />
+                            ) : (
+                                <View className="w-12 h-1 bg-white/20 rounded-full" />
+                            )}
                         </TouchableOpacity>
                     </View>
 
