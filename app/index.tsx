@@ -2,7 +2,8 @@ import { BlurView } from 'expo-blur';
 import { ChevronDown } from 'lucide-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Dimensions, ImageBackground, StatusBar, TouchableOpacity, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CalendarWidget from '../src/components/Calendar/CalendarWidget';
 import AgendaList from '../src/components/Todo/AgendaList';
@@ -14,6 +15,7 @@ const SCREEN_HEIGHT = Dimensions.get('window').height;
 const SHEET_TOP_OFFSET = 120; 
 // 底部可见高度 (日历下方区域) - 假设日历占上半部分，这里留出约 45% 的高度给待办列表
 const SHEET_PEEK_HEIGHT = SCREEN_HEIGHT * 0.45;
+const SHEET_PEEK_Y = SCREEN_HEIGHT - SHEET_PEEK_HEIGHT;
 
 export default function HomeScreen() {
   const { todos, addTodo, toggleTodo, deleteTodo } = useTodos();
@@ -21,7 +23,8 @@ export default function HomeScreen() {
   // isTodoExpanded 控制是否展开到顶部，默认 false 为底部 peek 模式
   const [isTodoExpanded, setIsTodoExpanded] = useState(false);
 
-  const translateY = useSharedValue(SCREEN_HEIGHT - SHEET_PEEK_HEIGHT);
+  const translateY = useSharedValue(SHEET_PEEK_Y);
+  const context = useSharedValue({ y: 0 });
 
   useEffect(() => {
     if (isTodoExpanded) {
@@ -32,12 +35,31 @@ export default function HomeScreen() {
       });
     } else {
       // 收缩到底部 (Peek)
-      translateY.value = withSpring(SCREEN_HEIGHT - SHEET_PEEK_HEIGHT, {
+      translateY.value = withSpring(SHEET_PEEK_Y, {
         damping: 20,
         stiffness: 90
       });
     }
   }, [isTodoExpanded]);
+
+  const gesture = Gesture.Pan()
+    .onStart(() => {
+      context.value = { y: translateY.value };
+    })
+    .onUpdate((event) => {
+      translateY.value = event.translationY + context.value.y;
+      // 限制拖拽范围
+      if (translateY.value < SHEET_TOP_OFFSET) {
+        translateY.value = SHEET_TOP_OFFSET + (translateY.value - SHEET_TOP_OFFSET) * 0.1;
+      }
+    })
+    .onEnd(() => {
+      if (translateY.value < (SHEET_PEEK_Y + SHEET_TOP_OFFSET) / 2) {
+        runOnJS(setIsTodoExpanded)(true);
+      } else {
+        runOnJS(setIsTodoExpanded)(false);
+      }
+    });
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
@@ -55,7 +77,7 @@ export default function HomeScreen() {
   }, [todos, selectedDateKey]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: 'black' }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: 'black' }}>
       <StatusBar barStyle="light-content" />
       
       {/* 背景图片: 实际开发请放入 assets/bg.jpg */}
@@ -77,53 +99,55 @@ export default function HomeScreen() {
                 </View>
 
                 {/* 待办列表 (滑动面板) */}
-                <Animated.View
-                  style={[
-                    {
-                      position: 'absolute',
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      top: 0, // 初始top为0，通过translateY控制位置
-                      backgroundColor: '#1a1b1e',
-                      borderTopLeftRadius: 24,
-                      borderTopRightRadius: 24,
-                      overflow: 'hidden',
-                      shadowColor: '#000',
-                      shadowOpacity: 0.5,
-                      shadowRadius: 24,
-                      borderTopWidth: 1,
-                      borderTopColor: 'rgba(255,255,255,0.1)',
-                      zIndex: 100,
-                    },
-                    animatedStyle
-                  ]}
-                >
-                    {/* 关闭把手/按钮 */}
-                    <View className="items-center py-2 bg-white/5 border-b border-white/5">
-                        <TouchableOpacity 
-                            onPress={() => setIsTodoExpanded(!isTodoExpanded)}
-                            className="p-1"
-                        >
-                            {isTodoExpanded ? (
-                                <ChevronDown size={24} color="#9ca3af" />
-                            ) : (
-                                <View className="w-12 h-1 bg-white/20 rounded-full" />
-                            )}
-                        </TouchableOpacity>
-                    </View>
+                <GestureDetector gesture={gesture}>
+                  <Animated.View
+                    style={[
+                      {
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        top: 0, // 初始top为0，通过translateY控制位置
+                        backgroundColor: '#1a1b1e',
+                        borderTopLeftRadius: 24,
+                        borderTopRightRadius: 24,
+                        overflow: 'hidden',
+                        shadowColor: '#000',
+                        shadowOpacity: 0.5,
+                        shadowRadius: 24,
+                        borderTopWidth: 1,
+                        borderTopColor: 'rgba(255,255,255,0.1)',
+                        zIndex: 100,
+                      },
+                      animatedStyle
+                    ]}
+                  >
+                      {/* 关闭把手/按钮 */}
+                      <View className="items-center py-2 bg-white/5 border-b border-white/5">
+                          <TouchableOpacity 
+                              onPress={() => setIsTodoExpanded(!isTodoExpanded)}
+                              className="p-1"
+                          >
+                              {isTodoExpanded ? (
+                                  <ChevronDown size={24} color="#9ca3af" />
+                              ) : (
+                                  <View className="w-12 h-1 bg-white/20 rounded-full" />
+                              )}
+                          </TouchableOpacity>
+                      </View>
 
-                    <AgendaList
-                        dateKey={selectedDateKey}
-                        todos={currentTodos}
-                        onAdd={(text) => addTodo(text, selectedDateKey)}
-                        onToggle={toggleTodo}
-                        onDelete={deleteTodo}
-                    />
-                </Animated.View>
+                      <AgendaList
+                          dateKey={selectedDateKey}
+                          todos={currentTodos}
+                          onAdd={(text) => addTodo(text, selectedDateKey)}
+                          onToggle={toggleTodo}
+                          onDelete={deleteTodo}
+                      />
+                  </Animated.View>
+                </GestureDetector>
             </SafeAreaView>
         </BlurView>
       </ImageBackground>
-    </View>
+    </GestureHandlerRootView>
   );
 }
