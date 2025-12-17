@@ -1,6 +1,5 @@
-import clsx from 'clsx';
 import * as Haptics from 'expo-haptics';
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Todo } from '../../types';
 import { getDateInfo } from '../../utils';
@@ -23,140 +22,112 @@ export const CalendarCell = React.memo(({
   const bottomText = festival || term || lunarText;
   const isFestival = !!(festival || term);
 
-  const dateColor = useMemo(() => {
-    if (isDifferentMonth) {
-      return 'rgba(148,163,184,0.3)';
-    }
-    if (isSelected || isToday) {
-      return '#34d399';
-    }
-    return '#ffffff';
-  }, [isDifferentMonth, isSelected, isToday]);
+  // 颜色逻辑
+  const dayTextColor = useMemo(() => {
+    if (isDifferentMonth) return 'rgba(255,255,255,0.2)';
+    if (isToday) return '#ffffff'; // 今天白字(红底)
+    if (isSelected) return '#000000'; // 选中黑字(白底)
+    return '#ffffff'; // 普通白字
+  }, [isDifferentMonth, isToday, isSelected]);
 
-  const lunarColor = useMemo(() => {
-    if (isFestival) {
-      if (isDifferentMonth) {
-        return 'rgba(34,197,94,0.7)';
-      }
-      return '#22c55e';
-    }
-    return dateColor;
-  }, [isFestival, isDifferentMonth, dateColor]);
+  const bottomTextColor = useMemo(() => {
+    if (isDifferentMonth) return 'rgba(255,255,255,0.1)';
+    if (isToday) return '#ef4444'; // 今天红字
+    if (isFestival) return '#ef4444'; // 节日红色
+    return '#a1a1aa'; // 农历灰色
+  }, [isDifferentMonth, isToday, isFestival]);
 
-  const MAX_TODO_DOTS = 5;
+  const circleColor = useMemo(() => {
+    if (isToday) return '#ef4444'; // 今天红圈
+    if (isSelected) return '#ffffff'; // 选中白圈
+    return 'transparent';
+  }, [isToday, isSelected]);
+
+  const MAX_TODO_DOTS = 3;
   const displayTodos = useMemo(() => {
     const sorted = [...todos].sort((a, b) => Number(a.completed) - Number(b.completed));
     return sorted.slice(0, MAX_TODO_DOTS);
   }, [todos]);
 
-  const lastPress = React.useRef(0);
-
+  const lastPress = useRef(0);
   const handlePress = () => {
+    Haptics.selectionAsync();
     const now = Date.now();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
     if (now - lastPress.current < 300) {
-      onDoubleSelect?.(date);
-      lastPress.current = 0;
+      onDoubleSelect && onDoubleSelect(date);
     } else {
-      lastPress.current = now;
       onSelect(date);
     }
-  };
-
-  const containerStyle = {
-    flex: 1,
-    height: 58,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    margin: 2,
-    borderRadius: 12,
-    borderWidth: 1,
-    backgroundColor: isSelected
-      ? 'rgba(34,197,94,0.2)'
-      : isToday
-      ? 'rgba(34,197,94,0.08)'
-      : 'transparent',
-    borderColor: isSelected
-      ? '#22c55e'
-      : isToday
-      ? 'rgba(34,197,94,0.7)'
-      : 'transparent',
+    lastPress.current = now;
   };
 
   return (
     <Pressable
       onPress={handlePress}
-      className={clsx(
-        "flex-1 items-center justify-center",
-        isSelected && "shadow-lg shadow-emerald-500/30"
-      )}
-      style={containerStyle}
+      style={{
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        paddingTop: 8,
+        height: 64, // 增加高度
+      }}
     >
-      {workStatus && (
-        <View
-          className={clsx(
-            "absolute top-1 right-1 px-1 rounded-[3px]",
-            workStatus === 'work' ? "bg-red-500/20" : "bg-emerald-500/20"
-          )}
-          style={{ opacity: isDifferentMonth ? 0.4 : 1 }}
-        >
-          <Text className={clsx("text-[8px] font-bold", workStatus === 'work' ? "text-red-400" : "text-emerald-400")}>
-            {workStatus === 'work' ? '班' : '休'}
-          </Text>
-        </View>
-      )}
-
-      <Text
-        className={clsx(
-          "text-base font-medium",
-          isDifferentMonth ? "text-white/20" : "text-white",
-          (isSelected || isToday) && !isDifferentMonth && "text-emerald-400"
-        )}
-        style={{ color: dateColor }}
+      {/* 今天背景圈 */}
+      <View
+        style={{
+            width: 36,
+            height: 36,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: 9999,
+            marginBottom: 4,
+            backgroundColor: circleColor
+        }}
       >
-        {date.getDate()}
-      </Text>
+          <Text
+            style={{ 
+                fontSize: 18, 
+                fontWeight: '600', 
+                color: dayTextColor 
+            }}
+          >
+            {date.getDate()}
+          </Text>
+      </View>
 
       <Text
-        className={clsx(
-          "text-[9px] mt-0.5",
-          isDifferentMonth ? "text-white/10" : "text-slate-400"
-        )}
-        style={{ color: lunarColor }}
+        style={{ 
+            fontSize: 9, 
+            fontWeight: '500', 
+            color: bottomTextColor 
+        }}
         numberOfLines={1}
       >
         {bottomText}
       </Text>
 
-      <View
-        className="mt-1.5"
-        style={{
-          height: 8,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        {displayTodos.map(todo => (
+      {/* 待办点 */}
+      <View style={{ flexDirection: 'row', gap: 2, marginTop: 4 }}>
+        {displayTodos.map((todo, idx) => (
           <View
-            key={todo.id}
+            key={todo.id || idx}
             style={{
-              width: 4,
-              height: 4,
-              borderRadius: 999,
-              backgroundColor: isDifferentMonth
-                ? todo.completed
-                  ? 'rgba(100,116,139,0.4)'
-                  : 'rgba(34,197,94,0.4)'
-                : todo.completed
-                ? '#64748b'
-                : '#22c55e',
-              marginHorizontal: 1,
+                width: 4,
+                height: 4,
+                borderRadius: 9999,
+                backgroundColor: todo.completed ? 'rgba(255,255,255,0.3)' : '#f97316' // 未完成橙色，完成灰色
             }}
           />
         ))}
       </View>
+
+      {/* 班/休 标记 */}
+      {workStatus && !isDifferentMonth && (
+        <View style={{ position: 'absolute', top: 4, right: 4 }}>
+            <Text style={{ fontSize: 8, color: workStatus === 'work' ? 'rgba(255,255,255,0.5)' : '#10b981' }}>
+                {workStatus === 'work' ? '班' : '休'}
+            </Text>
+        </View>
+      )}
     </Pressable>
   );
 });

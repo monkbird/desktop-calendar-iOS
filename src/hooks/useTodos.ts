@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '../supabase';
-import { Todo, SyncAction } from '../types';
 import NetInfo from '@react-native-community/netinfo';
+import { useEffect, useState } from 'react';
+import { AppState } from 'react-native';
+import { supabase } from '../supabase';
+import { SyncAction, Todo } from '../types';
+import { formatDateKey } from '../utils';
 
 const STORAGE_KEY_TODOS = 'ios-calendar-todos-v1';
 const STORAGE_KEY_QUEUE = 'ios-calendar-sync-queue';
@@ -32,6 +34,19 @@ export function useTodos() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // 监听 App 状态变化，从后台返回前台时检查迁移
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (nextAppState === 'active') {
+        checkAndMigrateTodos();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   // 迁移过期未完成待办到今天
   const checkAndMigrateTodos = async () => {
     try {
@@ -39,7 +54,7 @@ export function useTodos() {
         if (!savedTodosStr) return;
         
         const currentTodos: Todo[] = JSON.parse(savedTodosStr);
-        const todayKey = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        const todayKey = formatDateKey(new Date());
         
         let hasChanges = false;
         const newTodos = currentTodos.map(todo => {
@@ -169,7 +184,12 @@ export function useTodos() {
   const addTodo = (text: string, dateKey: string) => {
     const id = createId();
     const now = Date.now();
-    const newTodo: Todo = { id, text, completed: false, targetDate: dateKey, createdAt: now, updatedAt: now };
+    
+    // 如果选择的日期早于今天，强制归为今天
+    const todayKey = formatDateKey(new Date());
+    const targetDate = dateKey < todayKey ? todayKey : dateKey;
+
+    const newTodo: Todo = { id, text, completed: false, targetDate: targetDate, createdAt: now, updatedAt: now };
     
     setTodos(prev => [...prev, newTodo]);
     setSyncQueue(prev => [...prev, { id, type: 'INSERT', payload: newTodo, timestamp: now }]);
@@ -184,10 +204,16 @@ export function useTodos() {
     setSyncQueue(prev => [...prev, { id, type: 'UPDATE', payload: updates, timestamp: Date.now() }]);
   };
 
+  const updateTodo = (id: string, text: string) => {
+    const updates = { text, updatedAt: Date.now() };
+    setTodos(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    setSyncQueue(prev => [...prev, { id, type: 'UPDATE', payload: updates, timestamp: Date.now() }]);
+  };
+
   const deleteTodo = (id: string) => {
     setTodos(prev => prev.filter(t => t.id !== id));
     setSyncQueue(prev => [...prev, { id, type: 'DELETE', payload: id, timestamp: Date.now() }]);
   };
 
-  return { todos, addTodo, toggleTodo, deleteTodo, session };
+  return { todos, addTodo, toggleTodo, updateTodo, deleteTodo, session };
 }

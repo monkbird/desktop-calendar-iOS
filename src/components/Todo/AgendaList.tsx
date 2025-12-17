@@ -1,13 +1,13 @@
 import { CheckCircle2, Circle, Plus, Trash2 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    FlatList,
+    KeyboardAvoidingView,
+    Platform,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { Todo } from '../../types';
 
@@ -150,7 +150,7 @@ export default function AgendaList({
         <View
           style={{
             paddingHorizontal: 16,
-            paddingBottom: 16,
+            paddingBottom: 136, // SHEET_TOP_OFFSET (120) + 16 padding
             paddingTop: 8,
             borderTopWidth: 1,
             borderTopColor: 'rgba(255,255,255,0.1)',
@@ -174,6 +174,7 @@ export default function AgendaList({
               placeholderTextColor="#64748b"
               onSubmitEditing={handleAdd}
               returnKeyType="done"
+              blurOnSubmit={false}
               style={{
                 flex: 1,
                 fontSize: 14,

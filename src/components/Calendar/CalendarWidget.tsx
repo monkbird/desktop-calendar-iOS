@@ -1,14 +1,15 @@
 import {
-    toDateId,
-    useCalendar,
-    type CalendarActiveDateRange
+  toDateId,
+  useCalendar,
+  type CalendarActiveDateRange
 } from '@marceloterreiro/flash-calendar';
 import clsx from 'clsx';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { ChevronRight, RotateCcw } from 'lucide-react-native';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { FlatList, Modal, PanResponder, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { FlatList, Modal, Text, TouchableOpacity, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Todo } from '../../types';
 import { formatDateKey } from '../../utils';
 import { CalendarCell } from './CalendarCell';
@@ -29,6 +30,9 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect, onDo
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showYearPicker, setShowYearPicker] = useState(false);
   
+  // 1. 新增：视图模式切换 (月视图/周视图)
+  const [calendarFormat, setCalendarFormat] = useState<'month' | 'week'>('month');
+
   // 2. 性能优化：缓存 Todos Map
   const todosMap = useMemo(() => {
     const map: Record<string, Todo[]> = {};
@@ -57,9 +61,14 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect, onDo
   const handleNavigate = useCallback((direction: -1 | 1) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const newDate = new Date(currentDate);
-    newDate.setMonth(newDate.getMonth() + direction);
+    
+    if (calendarFormat === 'month') {
+      newDate.setMonth(newDate.getMonth() + direction);
+    } else {
+      newDate.setDate(newDate.getDate() + (direction * 7));
+    }
     setCurrentDate(newDate);
-  }, [currentDate]);
+  }, [currentDate, calendarFormat]);
 
   const handleGoToday = useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -69,22 +78,22 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect, onDo
     // 强制滚动到今天 (如果 FlashCalendar 支持 scrollToDate，可在此调用)
   }, [onDateSelect]);
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        const { dx, dy } = gestureState;
-        return Math.abs(dy) > 30 && Math.abs(dy) > Math.abs(dx);
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        const { dy } = gestureState;
-        if (dy <= -50) {
-          handleNavigate(1);
-        } else if (dy >= 50) {
-          handleNavigate(-1);
-        }
-      },
-    })
-  ).current;
+  const toggleFormat = useCallback(() => {
+    Haptics.selectionAsync();
+    setCalendarFormat(prev => prev === 'month' ? 'week' : 'month');
+  }, []);
+
+  const panGesture = useMemo(() => Gesture.Pan()
+    .runOnJS(true)
+    .activeOffsetY([-10, 10])
+    .onEnd((e) => {
+      const { translationY } = e;
+      if (translationY < -50) {
+        handleNavigate(1);
+      } else if (translationY > 50) {
+        handleNavigate(-1);
+      }
+    }), [handleNavigate]);
 
   return (
     <View
@@ -155,66 +164,67 @@ export default function CalendarWidget({ todos, selectedDate, onDateSelect, onDo
       </View>
 
       {/* --- Calendar Body --- */}
-      <View
-        className="flex-1 px-1 pt-2"
-        style={{ flex: 1, paddingTop: 8 }}
-        {...panResponder.panHandlers}
-      >
-        {/* 星期表头 */}
+      <GestureDetector gesture={panGesture}>
         <View
-          className="flex-row justify-around mb-2 px-1"
-          style={{
-            flexDirection: 'row',
-            justifyContent: 'space-around',
-            marginBottom: 8,
-          }}
+          className="flex-1 px-1 pt-2"
+          style={{ flex: 1, paddingTop: 8 }}
         >
-          {['日', '一', '二', '三', '四', '五', '六'].map((d, i) => (
-            <Text
-              key={d}
-              className={clsx(
-                "text-[10px] w-[14%] text-center font-medium",
-                (i === 0 || i === 6) ? "text-emerald-500/70" : "text-white/40"
-              )}
-            >
-              {d}
-            </Text>
-          ))}
-        </View>
-
-        {weeksList.map((week, rowIndex) => (
+          {/* 星期表头 */}
           <View
-            key={rowIndex}
-            className="flex-row"
+            className="flex-row justify-around mb-2 px-1"
             style={{
               flexDirection: 'row',
-              justifyContent: 'space-between',
+              justifyContent: 'space-around',
+              marginBottom: 8,
             }}
           >
-            {week.map((day) => {
-              const dateObj = day.date;
-              const dateKey = formatDateKey(dateObj);
-              const dayTodos = todosMap[dateKey] || [];
-
-              return (
-                <CalendarCell
-                  key={day.id}
-                  date={dateObj}
-                  isDifferentMonth={day.isDifferentMonth}
-                  isToday={day.isToday}
-                  isSelected={day.id === selectedDateId}
-                  onSelect={(d) => {
-                    setCurrentDate(d);
-                    onDateSelect(d);
-                  }}
-                  onDoubleSelect={onDoubleSelect}
-                  todos={dayTodos}
-                />
-              );
-            })}
+            {['日', '一', '二', '三', '四', '五', '六'].map((d, i) => (
+              <Text
+                key={d}
+                className={clsx(
+                  "text-[10px] w-[14%] text-center font-medium",
+                  (i === 0 || i === 6) ? "text-emerald-500/70" : "text-white/40"
+                )}
+              >
+                {d}
+              </Text>
+            ))}
           </View>
-        ))}
-      </View>
+
+          {weeksList.map((week, rowIndex) => (
+            <View
+              key={rowIndex}
+              className="flex-row"
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+              }}
+            >
+              {week.map((day) => {
+                const dateObj = day.date;
+                const dateKey = formatDateKey(dateObj);
+                const dayTodos = todosMap[dateKey] || [];
+
+                return (
+                  <CalendarCell
+                    key={day.id}
+                    date={dateObj}
+                    isDifferentMonth={day.isDifferentMonth}
+                    isToday={day.isToday}
+                    isSelected={day.id === selectedDateId}
+                    onSelect={(d) => {
+                      setCurrentDate(d);
+                      onDateSelect(d);
+                    }}
+                    onDoubleSelect={onDoubleSelect}
+                    todos={dayTodos}
+                  />
+                );
+              })}
+            </View>
+          ))}
+        </View>
+      </GestureDetector>
 
       {/* --- Year Picker Modal (优化版) --- */}
       <Modal visible={showYearPicker} transparent animationType="fade" onRequestClose={() => setShowYearPicker(false)}>
