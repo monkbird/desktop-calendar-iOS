@@ -1,14 +1,17 @@
+import { BlurView } from 'expo-blur';
 import { Calendar, Inbox, Plus, Search } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, { Easing, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import MonthView from '../src/components/Calendar/MonthView';
 import YearView from '../src/components/Calendar/YearView';
 import { TodoItem } from '../src/components/Todo/TodoItem';
 import { TodoModal } from '../src/components/Todo/TodoModal';
+import { AnimatedNumber } from '../src/components/UI/AnimatedNumber';
 import { useTodos } from '../src/hooks/useTodos';
 import { Todo } from '../src/types';
-import { formatDateKey } from '../src/utils';
+import { formatDateKey, getDateInfo } from '../src/utils';
 
 export default function HomeScreen() {
   const { todos, addTodo, toggleTodo, updateTodo, deleteTodo } = useTodos();
@@ -20,8 +23,28 @@ export default function HomeScreen() {
   // selectedDate 控制用户点击选中的日期
   const [selectedDate, setSelectedDate] = useState(new Date());
 
+  // 当前视图的周数（用于自适应高度）
+  const [weekCount, setWeekCount] = useState(5);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      top: withTiming(560 + (weekCount - 5) * 65, {
+        duration: 300,
+        easing: Easing.out(Easing.exp),
+      }),
+    };
+  }, [weekCount]);
+
   const selectedDateKey = formatDateKey(selectedDate);
-  const selectedTodos = todos.filter(t => t.targetDate === selectedDateKey);
+  const selectedTodos = todos
+    .filter(t => t.targetDate === selectedDateKey)
+    .sort((a, b) => Number(a.completed) - Number(b.completed));
+
+  const totalTodos = selectedTodos.length;
+  const completedTodos = selectedTodos.filter(t => t.completed).length;
+  const uncompletedTodos = totalTodos - completedTodos;
+
+  const dateInfo = getDateInfo(selectedDate);
 
   const [isModalVisible, setModalVisible] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
@@ -80,12 +103,13 @@ export default function HomeScreen() {
             />
         ) : (
             <MonthView 
-                key={currentDate.toISOString()} // 日期变化时重置视图
+                // Removed key to prevent re-mounting on date change, enabling scroll animation
                 initialDate={currentDate}
                 selectedDate={selectedDate}
                 onDateSelect={setSelectedDate}
                 onDoubleSelect={handleDoubleSelect}
                 onBackToYear={handleBackToYear}
+                onWeekCountChange={setWeekCount}
                 todos={todos}
             />
         )}
@@ -107,7 +131,8 @@ export default function HomeScreen() {
             borderRadius: 9999, 
             borderColor: 'rgba(255,255,255,0.1)', 
             borderWidth: 1,
-            shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4
+            shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4,
+            zIndex: 100
         }}
       >
         <TouchableOpacity>
@@ -121,6 +146,86 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
+
+
+      {/* 无日程提示 (仅在月视图且无待办时显示?) 
+          根据图1，它显示在屏幕下方区域。
+          我们可以做一个绝对定位的层，或者集成在 MonthView 里。
+          为了简单，这里做一个悬浮层，但要注意不要遮挡日期。
+          如果 MonthView 是全屏的，这个提示应该在底部留白区域。
+          目前 MonthView 也是全屏的，所以这个提示可以作为 Overlay。
+      */}
+      {viewMode === 'month' && (
+          <Animated.View pointerEvents="box-none" style={[{ position: 'absolute', bottom: 0, width: '100%' }, animatedStyle]}>
+              <BlurView intensity={20} tint="dark" style={{ borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden', flex: 1 }}>
+                  <View style={{ 
+                      flexDirection: 'row', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      paddingVertical: 12,
+                      paddingHorizontal: 16,
+                      borderBottomWidth: 0.5,
+                      borderBottomColor: 'rgba(255,255,255,0.1)'
+                  }}>
+                      {/* 左侧：日期信息 */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                          <Text style={{ color: 'white', fontSize: 16, fontWeight: '600', marginRight: 8 }}>
+                              {selectedDate.getMonth() + 1}月{selectedDate.getDate()}日
+                          </Text>
+                          <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginRight: 8 }}>
+                              {dateInfo.fullLunar}
+                          </Text>
+                          {(dateInfo.term || dateInfo.festival) ? (
+                              <Text style={{ color: '#f87171', fontSize: 12 }}>
+                                  {dateInfo.festival || dateInfo.term}
+                              </Text>
+                          ) : null}
+                      </View>
+
+                      {/* 中间分隔线 */}
+                      <View style={{ width: 1, height: 16, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 12 }} />
+
+                      {/* 右侧：待办统计 */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginRight: 4 }}>待办</Text>
+                          <View style={{ marginRight: 8 }}>
+                            <AnimatedNumber value={totalTodos} style={{ fontSize: 12, color: '#f87171', fontWeight: 'bold' }} />
+                          </View>
+                          
+                          <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', marginRight: 8 }}>|</Text>
+
+                          <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginRight: 4 }}>完成</Text>
+                          <View style={{ marginRight: 8 }}>
+                            <AnimatedNumber value={completedTodos} style={{ fontSize: 12, color: '#9ca3af', fontWeight: 'bold' }} />
+                          </View>
+
+                          <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', marginRight: 8 }}>|</Text>
+
+                          <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginRight: 4 }}>未完成</Text>
+                          <AnimatedNumber value={uncompletedTodos} style={{ fontSize: 12, color: '#fbbf24', fontWeight: 'bold' }} />
+                      </View>
+                  </View>
+                  {selectedTodos.length > 0 ? (
+                      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+                          {selectedTodos.map(todo => (
+                              <TodoItem 
+                                  key={todo.id} 
+                                  todo={todo} 
+                                  onToggle={toggleTodo} 
+                                  onDelete={deleteTodo}
+                                  onEdit={handleEditTodo}
+                              />
+                          ))}
+                      </ScrollView>
+                  ) : (
+                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 40 }}>
+                          <Text style={{ color: 'rgba(255,255,255,0.3)', fontWeight: '500', fontSize: 18 }}>无待办</Text>
+                      </View>
+                  )}
+              </BlurView>
+          </Animated.View>
+      )}
+
       {/* 底部栏 */}
       <View style={{ 
           position: 'absolute', 
@@ -129,7 +234,8 @@ export default function HomeScreen() {
           right: 24, 
           flexDirection: 'row', 
           justifyContent: 'space-between', 
-          alignItems: 'center' 
+          alignItems: 'center',
+          zIndex: 50
         }}>
         {/* 今天按钮 */}
         <TouchableOpacity 
@@ -145,8 +251,6 @@ export default function HomeScreen() {
                 const now = new Date();
                 setSelectedDate(now);
                 setCurrentDate(now);
-                // 如果在年视图，可能需要跳转到月视图？或者只是滚动到今年？
-                // 简单起见，点击今天回到月视图
                 setViewMode('month');
             }}
         >
@@ -170,35 +274,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
         </View>
       </View>
-
-      {/* 无日程提示 (仅在月视图且无待办时显示?) 
-          根据图1，它显示在屏幕下方区域。
-          我们可以做一个绝对定位的层，或者集成在 MonthView 里。
-          为了简单，这里做一个悬浮层，但要注意不要遮挡日期。
-          如果 MonthView 是全屏的，这个提示应该在底部留白区域。
-          目前 MonthView 也是全屏的，所以这个提示可以作为 Overlay。
-      */}
-      {viewMode === 'month' && (
-          <View pointerEvents="box-none" style={{ position: 'absolute', top: 580, bottom: 80, width: '100%', paddingHorizontal: 24 }}>
-              {selectedTodos.length > 0 ? (
-                  <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false}>
-                      {selectedTodos.map(todo => (
-                          <TodoItem 
-                              key={todo.id} 
-                              todo={todo} 
-                              onToggle={toggleTodo} 
-                              onDelete={deleteTodo}
-                              onEdit={handleEditTodo}
-                          />
-                      ))}
-                  </ScrollView>
-              ) : (
-                  <View style={{ alignItems: 'center', marginTop: 20 }}>
-                      <Text style={{ color: 'rgba(255,255,255,0.3)', fontWeight: '500', fontSize: 18 }}>无日程</Text>
-                  </View>
-              )}
-          </View>
-      )}
       
       <TodoModal 
         visible={isModalVisible}
@@ -206,6 +281,7 @@ export default function HomeScreen() {
         onSave={handleSaveTodo}
         initialText={editingTodo?.text}
         isEditing={!!editingTodo}
+        date={selectedDate}
       />
     </GestureHandlerRootView>
   );

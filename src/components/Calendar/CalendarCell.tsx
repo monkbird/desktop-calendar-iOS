@@ -24,9 +24,9 @@ export const CalendarCell = React.memo(({
 
   // 颜色逻辑
   const dayTextColor = useMemo(() => {
-    if (isDifferentMonth) return 'rgba(255,255,255,0.2)';
     if (isToday) return '#ffffff'; // 今天白字(红底)
     if (isSelected) return '#000000'; // 选中黑字(白底)
+    if (isDifferentMonth) return 'rgba(255,255,255,0.2)';
     return '#ffffff'; // 普通白字
   }, [isDifferentMonth, isToday, isSelected]);
 
@@ -43,7 +43,7 @@ export const CalendarCell = React.memo(({
     return 'transparent';
   }, [isToday, isSelected]);
 
-  const MAX_TODO_DOTS = 3;
+  const MAX_TODO_DOTS = 5;
   const displayTodos = useMemo(() => {
     const sorted = [...todos].sort((a, b) => Number(a.completed) - Number(b.completed));
     return sorted.slice(0, MAX_TODO_DOTS);
@@ -53,8 +53,10 @@ export const CalendarCell = React.memo(({
   const handlePress = () => {
     Haptics.selectionAsync();
     const now = Date.now();
-    if (now - lastPress.current < 300) {
-      onDoubleSelect && onDoubleSelect(date);
+    if (now - lastPress.current < 500) {
+      if (onDoubleSelect) {
+        onDoubleSelect(date);
+      }
     } else {
       onSelect(date);
     }

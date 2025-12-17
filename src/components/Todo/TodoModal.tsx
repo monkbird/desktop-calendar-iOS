@@ -7,9 +7,10 @@ interface TodoModalProps {
   onSave: (text: string) => void;
   initialText?: string;
   isEditing?: boolean;
+  date?: Date;
 }
 
-export const TodoModal = ({ visible, onClose, onSave, initialText = '', isEditing = false }: TodoModalProps) => {
+export const TodoModal = ({ visible, onClose, onSave, initialText = '', isEditing = false, date }: TodoModalProps) => {
   const [text, setText] = useState(initialText);
   const inputRef = useRef<TextInput>(null);
 
@@ -42,9 +43,16 @@ export const TodoModal = ({ visible, onClose, onSave, initialText = '', isEditin
         <TouchableOpacity style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }} onPress={onClose} />
         
         <View style={{ width: '80%', backgroundColor: '#1c1c1e', borderRadius: 16, padding: 20 }}>
-          <Text style={{ color: 'white', fontSize: 18, fontWeight: '600', marginBottom: 16 }}>
-            {isEditing ? '编辑待办' : '新建待办'}
-          </Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <Text style={{ color: 'white', fontSize: 18, fontWeight: '600' }}>
+              {isEditing ? '编辑待办' : '新建待办'}
+            </Text>
+            {date && (
+              <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14 }}>
+                {date.getMonth() + 1}月{date.getDate()}日
+              </Text>
+            )}
+          </View>
           
           <TextInput
             ref={inputRef}

@@ -1,7 +1,7 @@
-import React from 'react';
+import { Trash2 } from 'lucide-react-native';
+import React, { useRef } from 'react';
 import { Animated, Text, TouchableOpacity, View } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
-import { Trash2 } from 'lucide-react-native';
 import { Todo } from '../../types';
 
 interface TodoItemProps {
@@ -12,6 +12,16 @@ interface TodoItemProps {
 }
 
 export const TodoItem = ({ todo, onToggle, onDelete, onEdit }: TodoItemProps) => {
+  const lastPress = useRef(0);
+
+  const handlePress = () => {
+    const now = Date.now();
+    if (now - lastPress.current < 500) {
+      onEdit(todo);
+    }
+    lastPress.current = now;
+  };
+
   const renderRightActions = (_: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>) => {
     const scale = dragX.interpolate({
       inputRange: [-100, 0],
@@ -31,12 +41,13 @@ export const TodoItem = ({ todo, onToggle, onDelete, onEdit }: TodoItemProps) =>
   return (
     <Swipeable renderRightActions={renderRightActions}>
       <TouchableOpacity 
-        onPress={() => onEdit(todo)}
+        onPress={handlePress}
+        activeOpacity={1}
         style={{ 
             flexDirection: 'row', 
             alignItems: 'center', 
             paddingVertical: 12,
-            backgroundColor: 'black' // 确保背景色遮挡
+            // backgroundColor: 'black' // Removed for glass effect
         }}
       >
         <TouchableOpacity 
