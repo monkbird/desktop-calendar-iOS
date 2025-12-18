@@ -62,14 +62,17 @@ export const TodoModal = ({ visible, onClose, onSave, initialText = '', isEditin
                 padding: 12, 
                 borderRadius: 8, 
                 fontSize: 16,
-                marginBottom: 16
+                marginBottom: 16,
+                minHeight: 100, // 增加高度
+                textAlignVertical: 'top' // 文字置顶
             }}
             value={text}
             onChangeText={setText}
             placeholder="输入待办事项..."
             placeholderTextColor="rgba(255,255,255,0.3)"
-            onSubmitEditing={handleSave}
-            returnKeyType="done"
+            multiline={true} // 开启多行，解决中文输入法回车误触提交的问题
+            // onSubmitEditing={handleSave} // 多行模式下回车是换行，不自动提交
+            // returnKeyType="done"
           />
           
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>

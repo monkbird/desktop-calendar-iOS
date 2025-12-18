@@ -68,7 +68,6 @@ export const TodoItem = ({ todo, onToggle, onDelete, onEdit }: TodoItemProps) =>
         </TouchableOpacity>
         
         <Text 
-          numberOfLines={1} 
           style={{ 
             color: todo.completed ? 'rgba(255,255,255,0.3)' : 'white', 
             fontSize: 16,

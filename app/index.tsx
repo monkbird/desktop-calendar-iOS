@@ -1,9 +1,9 @@
 import { BlurView } from 'expo-blur';
 import { Calendar, Inbox, Plus, Search } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, { Easing, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, FadeIn, FadeOut, Keyframe, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import MonthView from '../src/components/Calendar/MonthView';
 import YearView from '../src/components/Calendar/YearView';
 import { TodoItem } from '../src/components/Todo/TodoItem';
@@ -13,12 +13,36 @@ import { useTodos } from '../src/hooks/useTodos';
 import { Todo } from '../src/types';
 import { formatDateKey, getDateInfo } from '../src/utils';
 
+// 定义视图切换动画
+// 进入月份 (Open/Expand): 年份变大消失，月份从小变大出现
+const OpenMonthEnter = new Keyframe({
+    0: { transform: [{ scale: 0.8 }], opacity: 0 },
+    100: { transform: [{ scale: 1 }], opacity: 1 },
+});
+const OpenYearExit = new Keyframe({
+    0: { transform: [{ scale: 1 }], opacity: 1 },
+    100: { transform: [{ scale: 1.2 }], opacity: 0 },
+});
+
+// 返回年份 (Close/Gather): 月份变小消失，年份从大变小出现
+const CloseMonthExit = new Keyframe({
+    0: { transform: [{ scale: 1 }], opacity: 1 },
+    100: { transform: [{ scale: 0.8 }], opacity: 0 },
+});
+const CloseYearEnter = new Keyframe({
+    0: { transform: [{ scale: 1.2 }], opacity: 0 },
+    100: { transform: [{ scale: 1 }], opacity: 1 },
+});
+
 export default function HomeScreen() {
   const { todos, addTodo, toggleTodo, updateTodo, deleteTodo } = useTodos();
   const [viewMode, setViewMode] = useState<'year' | 'month'>('month');
   
   // currentDate 控制视图显示的月份/年份
   const [currentDate, setCurrentDate] = useState(new Date());
+  
+  // 稳定的 "今天" 对象，避免 render 时重复创建
+  const [today] = useState(() => new Date());
   
   // selectedDate 控制用户点击选中的日期
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -29,8 +53,8 @@ export default function HomeScreen() {
   const animatedStyle = useAnimatedStyle(() => {
     return {
       top: withTiming(560 + (weekCount - 5) * 65, {
-        duration: 300,
-        easing: Easing.out(Easing.exp),
+        duration: 800,
+        easing: Easing.out(Easing.cubic),
       }),
     };
   }, [weekCount]);
@@ -95,23 +119,38 @@ export default function HomeScreen() {
       {/* 主视图区域 */}
       <View style={{ flex: 1 }}>
         {viewMode === 'year' ? (
-            <YearView 
-                key={currentDate.getFullYear()} // 年份变化时重置
-                initialYear={currentDate.getFullYear()} 
-                onMonthSelect={handleMonthSelectFromYear}
-                currentDate={new Date()} 
-            />
+            <Animated.View 
+                key="year"
+                style={[StyleSheet.absoluteFill, { zIndex: 1 }]}
+                entering={CloseYearEnter.duration(300)}
+                exiting={OpenYearExit.duration(300)}
+            >
+                <YearView 
+                    key={currentDate.getFullYear()} // 年份变化时重置
+                    initialYear={currentDate.getFullYear()} 
+                    onMonthSelect={handleMonthSelectFromYear}
+                    currentDate={today} 
+                    todos={todos}
+                />
+            </Animated.View>
         ) : (
-            <MonthView 
-                // Removed key to prevent re-mounting on date change, enabling scroll animation
-                initialDate={currentDate}
-                selectedDate={selectedDate}
-                onDateSelect={setSelectedDate}
-                onDoubleSelect={handleDoubleSelect}
-                onBackToYear={handleBackToYear}
-                onWeekCountChange={setWeekCount}
-                todos={todos}
-            />
+            <Animated.View 
+                key="month"
+                style={[StyleSheet.absoluteFill, { zIndex: 1 }]}
+                entering={OpenMonthEnter.duration(300)}
+                exiting={CloseMonthExit.duration(300)}
+            >
+                <MonthView 
+                    // Removed key to prevent re-mounting on date change, enabling scroll animation
+                    initialDate={currentDate}
+                    selectedDate={selectedDate}
+                    onDateSelect={setSelectedDate}
+                    onDoubleSelect={handleDoubleSelect}
+                    onBackToYear={handleBackToYear}
+                    onWeekCountChange={setWeekCount}
+                    todos={todos}
+                />
+            </Animated.View>
         )}
       </View>
 
@@ -205,23 +244,32 @@ export default function HomeScreen() {
                           <AnimatedNumber value={uncompletedTodos} style={{ fontSize: 12, color: '#fbbf24', fontWeight: 'bold' }} />
                       </View>
                   </View>
-                  {selectedTodos.length > 0 ? (
-                      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
-                          {selectedTodos.map(todo => (
-                              <TodoItem 
-                                  key={todo.id} 
-                                  todo={todo} 
-                                  onToggle={toggleTodo} 
-                                  onDelete={deleteTodo}
-                                  onEdit={handleEditTodo}
-                              />
-                          ))}
-                      </ScrollView>
-                  ) : (
-                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 40 }}>
-                          <Text style={{ color: 'rgba(255,255,255,0.3)', fontWeight: '500', fontSize: 18 }}>无待办</Text>
-                      </View>
-                  )}
+                  <View style={{ flex: 1, overflow: 'hidden' }}>
+                    <Animated.View
+                        key={selectedDateKey}
+                        entering={FadeIn.duration(400).delay(100)}
+                        exiting={FadeOut.duration(400)}
+                        style={[StyleSheet.absoluteFill]}
+                    >
+                      {selectedTodos.length > 0 ? (
+                          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+                              {selectedTodos.map(todo => (
+                                  <TodoItem 
+                                      key={todo.id} 
+                                      todo={todo} 
+                                      onToggle={toggleTodo} 
+                                      onDelete={deleteTodo}
+                                      onEdit={handleEditTodo}
+                                  />
+                              ))}
+                          </ScrollView>
+                      ) : (
+                          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 40 }}>
+                              <Text style={{ color: 'rgba(255,255,255,0.3)', fontWeight: '500', fontSize: 18 }}>无待办</Text>
+                          </View>
+                      )}
+                    </Animated.View>
+                  </View>
               </BlurView>
           </Animated.View>
       )}
