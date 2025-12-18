@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { Easing, FadeIn, FadeOut, Keyframe, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import MonthView from '../src/components/Calendar/MonthView';
 import YearView from '../src/components/Calendar/YearView';
+import { SearchModal } from '../src/components/Todo/SearchModal';
 import { TodoItem } from '../src/components/Todo/TodoItem';
 import { TodoModal } from '../src/components/Todo/TodoModal';
 import { AnimatedNumber } from '../src/components/UI/AnimatedNumber';
@@ -71,7 +72,19 @@ export default function HomeScreen() {
   const dateInfo = getDateInfo(selectedDate);
 
   const [isModalVisible, setModalVisible] = useState(false);
+  const [isSearchVisible, setSearchVisible] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+
+  const handleSearchResultSelect = (dateString: string) => {
+      // 解析日期 YYYY-MM-DD
+      const [year, month, day] = dateString.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
+      
+      setSelectedDate(date);
+      setCurrentDate(date);
+      setViewMode('month');
+      setSearchVisible(false);
+  };
 
   const handleAddTodo = () => {
       setEditingTodo(null);
@@ -177,7 +190,7 @@ export default function HomeScreen() {
         <TouchableOpacity>
             <Calendar size={20} color="white" />
         </TouchableOpacity>
-        <TouchableOpacity style={{ marginLeft: 12 }}>
+        <TouchableOpacity style={{ marginLeft: 12 }} onPress={() => setSearchVisible(true)}>
             <Search size={20} color="white" />
         </TouchableOpacity>
         <TouchableOpacity style={{ marginLeft: 12 }} onPress={handleAddTodo}>
@@ -330,6 +343,13 @@ export default function HomeScreen() {
         initialText={editingTodo?.text}
         isEditing={!!editingTodo}
         date={selectedDate}
+      />
+      
+      <SearchModal 
+        visible={isSearchVisible}
+        onClose={() => setSearchVisible(false)}
+        todos={todos}
+        onSelectTodo={handleSearchResultSelect}
       />
     </GestureHandlerRootView>
   );

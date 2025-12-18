@@ -4,7 +4,7 @@ import { BlurView } from 'expo-blur';
 import { ChevronLeft } from 'lucide-react-native';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Easing, runOnJS, useDerivedValue, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Todo } from '../../types';
 import { formatDateKey } from '../../utils';
 import { CalendarCell } from './CalendarCell';
@@ -253,20 +253,16 @@ export default function MonthView({ initialDate, selectedDate, onDateSelect, onD
     const initialIndex = 60;
     
     // Track current scroll offset for custom animation
-    const scrollY = useSharedValue(initialIndex * SCREEN_HEIGHT);
-    const isAnimating = useSharedValue(false);
+    const listOpacity = useSharedValue(1);
+    
+    const animatedListStyle = useAnimatedStyle(() => ({
+        opacity: listOpacity.value
+    }));
 
     // Helper to scroll via JS ref
-    const scrollToOffset = (offset: number) => {
-        listRef.current?.scrollToOffset({ offset, animated: false });
+    const scrollToIndex = (index: number) => {
+        listRef.current?.scrollToIndex({ index, animated: false });
     };
-
-    // Drive the custom scroll animation
-    useDerivedValue(() => {
-        if (isAnimating.value) {
-            runOnJS(scrollToOffset)(scrollY.value);
-        }
-    });
 
     // 监听 initialDate 变化以实现动画跳转
     useEffect(() => {
@@ -274,63 +270,27 @@ export default function MonthView({ initialDate, selectedDate, onDateSelect, onD
         const targetIndex = 60 + diff; // 60 是中间索引
 
         if (targetIndex >= 0 && targetIndex < months.length) {
-            // Calculate animation parameters
-            const targetOffset = targetIndex * SCREEN_HEIGHT;
-            const startOffset = scrollY.value; // Assuming scrollY tracks current position via onScroll
-            const dist = Math.abs(targetOffset - startOffset);
-            const monthDiff = Math.abs(targetIndex - (startOffset / SCREEN_HEIGHT));
-            
-            // Dynamic duration: Base 500ms + 100ms per month diff, capped at 2.5s
-            // This ensures "last 1 unit takes ~0.5s" logic via Ease Out Cubic
-            // Reduce duration for smoother transition from Year view
-            const duration = monthDiff > 0 ? Math.min(1500, 300 + monthDiff * 80) : 0;
+            // 如果列表尚未显示（初始化中），则不执行转场动画，直接依赖 initialScrollIndex 或布局回调
+            if (!isListVisible) return;
 
-            if (duration > 0) {
-                isAnimating.value = true;
-                // Use a slight delay to allow layout to settle if needed, or remove it for instant start
-                // But for "Year -> Month" transition, we might want to just JUMP if it's the initial render of this component instance?
-                // Actually, when coming from Year view, MonthView is mounted afresh.
-                // So initialDate will be set, baseDate is set to initialDate.
-                // diff will be 0.
-                // So it enters the "else" block below (duration === 0).
-                
-                // WAIT! When mounting from Year view:
-                // initialDate is the selected month.
-                // baseDate is useState(initialDate).
-                // diff is 0.
-                // targetIndex is 60.
-                // scrollY is initialIndex * SCREEN_HEIGHT (60 * H).
-                // So monthDiff is 0.
-                // Duration is 0.
-                // It should jump IMMEDIATELY.
-                
-                // Why is there a delay?
-                // Maybe the FlashList initialScrollIndex takes time?
-                // Or maybe the parent animation (OpenMonthEnter) has a delay?
-                
-                scrollY.value = withTiming(targetOffset, {
-                    duration: duration,
-                    easing: Easing.out(Easing.cubic),
-                }, (finished) => {
+            // 检查目标月份是否已经是当前显示的月份
+            const currentMonthId = currentViewDate.getFullYear() * 12 + currentViewDate.getMonth();
+            const targetMonthId = initialDate.getFullYear() * 12 + initialDate.getMonth();
+
+            // 只有当月份确实发生变化时才执行 "淡出 -> 跳转 -> 淡入" 动画
+            if (currentMonthId !== targetMonthId) {
+                listOpacity.value = withTiming(0, { duration: 250 }, (finished) => {
                     if (finished) {
-                        isAnimating.value = false;
+                        runOnJS(scrollToIndex)(targetIndex);
+                        listOpacity.value = withTiming(1, { duration: 250 });
                     }
                 });
-            } else {
-                // Immediate jump if no diff
-                // Ensure we are at the correct position immediately
-                // requestAnimationFrame might help with initial rendering glitch
-                requestAnimationFrame(() => {
-                    listRef.current?.scrollToIndex({ index: targetIndex, animated: false });
-                });
-                scrollY.value = targetOffset;
             }
         } else {
             // 超出范围则重置 baseDate (无动画)
             setBaseDate(initialDate);
-            scrollY.value = 60 * SCREEN_HEIGHT; // Reset scroll tracker
         }
-    }, [initialDate, baseDate, months]);
+    }, [initialDate, baseDate, months, isListVisible]);
 
     const todosMap = useMemo(() => {
         const map: Record<string, Todo[]> = {};
@@ -368,7 +328,7 @@ export default function MonthView({ initialDate, selectedDate, onDateSelect, onD
             
             {/* 交互列表：延迟加载，准备好后渐显 */}
             {shouldRenderList && (
-                <View style={{ flex: 1, opacity: isListVisible ? 1 : 0 }}>
+                <Animated.View style={[{ flex: 1, opacity: isListVisible ? 1 : 0 }, animatedListStyle]}>
                     <FlashList
                         ref={listRef}
                         data={months}
@@ -391,13 +351,6 @@ export default function MonthView({ initialDate, selectedDate, onDateSelect, onD
                         viewabilityConfig={{
                             itemVisiblePercentThreshold: 50
                         }}
-                        onScroll={(e) => {
-                            // Update shared value only if NOT animating (to avoid fighting)
-                            // Or actually, we should update it to keep it in sync if user drags
-                            if (!isAnimating.value) {
-                                scrollY.value = e.nativeEvent.contentOffset.y;
-                            }
-                        }}
                         scrollEventThrottle={16}
                         onLayout={() => {
                             // 列表布局完成后，稍微等待以确保 initialScrollIndex 生效，然后显示
@@ -406,7 +359,7 @@ export default function MonthView({ initialDate, selectedDate, onDateSelect, onD
                             });
                         }}
                     />
-                </View>
+                </Animated.View>
             )}
         </View>
     );
