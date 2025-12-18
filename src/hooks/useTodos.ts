@@ -215,5 +215,15 @@ export function useTodos() {
     setSyncQueue(prev => [...prev, { id, type: 'DELETE', payload: id, timestamp: Date.now() }]);
   };
 
-  return { todos, addTodo, toggleTodo, updateTodo, deleteTodo, session };
+  const importTodos = (importedTodos: Todo[]) => {
+    setTodos(prev => {
+        const todoMap = new Map(prev.map(t => [t.id, t]));
+        importedTodos.forEach(t => {
+            todoMap.set(t.id, t);
+        });
+        return Array.from(todoMap.values());
+    });
+  };
+
+  return { todos, addTodo, toggleTodo, updateTodo, deleteTodo, importTodos, session };
 }

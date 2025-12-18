@@ -1,11 +1,12 @@
 import { BlurView } from 'expo-blur';
-import { Calendar, Inbox, Plus, Search } from 'lucide-react-native';
+import { FileSpreadsheet, Inbox, Plus, Search } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { Easing, FadeIn, FadeOut, Keyframe, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import MonthView from '../src/components/Calendar/MonthView';
 import YearView from '../src/components/Calendar/YearView';
+import { ImportExportModal } from '../src/components/Todo/ImportExportModal';
 import { SearchModal } from '../src/components/Todo/SearchModal';
 import { TodoItem } from '../src/components/Todo/TodoItem';
 import { TodoModal } from '../src/components/Todo/TodoModal';
@@ -13,6 +14,7 @@ import { AnimatedNumber } from '../src/components/UI/AnimatedNumber';
 import { useTodos } from '../src/hooks/useTodos';
 import { Todo } from '../src/types';
 import { formatDateKey, getDateInfo } from '../src/utils';
+import { exportTodosToExcel, importTodosFromExcel } from '../src/utils/fileHandler';
 
 // 定义视图切换动画
 // 进入月份 (Open/Expand): 年份变大消失，月份从小变大出现
@@ -36,7 +38,7 @@ const CloseYearEnter = new Keyframe({
 });
 
 export default function HomeScreen() {
-  const { todos, addTodo, toggleTodo, updateTodo, deleteTodo } = useTodos();
+  const { todos, addTodo, toggleTodo, updateTodo, deleteTodo, importTodos } = useTodos();
   const [viewMode, setViewMode] = useState<'year' | 'month'>('month');
   
   // currentDate 控制视图显示的月份/年份
@@ -73,6 +75,7 @@ export default function HomeScreen() {
 
   const [isModalVisible, setModalVisible] = useState(false);
   const [isSearchVisible, setSearchVisible] = useState(false);
+  const [isImportExportVisible, setImportExportVisible] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
 
   const handleSearchResultSelect = (dateString: string) => {
@@ -123,6 +126,26 @@ export default function HomeScreen() {
         setCurrentDate(date);
     }
     setViewMode('year');
+  };
+
+  const handleExport = async () => {
+      try {
+          await exportTodosToExcel(todos);
+      } catch (e) {
+          Alert.alert('导出失败', String(e));
+      }
+  };
+
+  const handleImport = async () => {
+      try {
+          const imported = await importTodosFromExcel();
+          if (imported.length > 0) {
+              importTodos(imported);
+              Alert.alert('导入成功', `成功导入 ${imported.length} 条待办`);
+          }
+      } catch (e) {
+          Alert.alert('导入失败', String(e));
+      }
   };
 
   return (
@@ -187,11 +210,8 @@ export default function HomeScreen() {
             zIndex: 100
         }}
       >
-        <TouchableOpacity>
-            <Calendar size={20} color="white" />
-        </TouchableOpacity>
-        <TouchableOpacity style={{ marginLeft: 12 }} onPress={() => setSearchVisible(true)}>
-            <Search size={20} color="white" />
+        <TouchableOpacity onPress={() => setImportExportVisible(true)}>
+            <FileSpreadsheet size={20} color="white" />
         </TouchableOpacity>
         <TouchableOpacity style={{ marginLeft: 12 }} onPress={handleAddTodo}>
             <Plus size={20} color="white" />
@@ -208,7 +228,7 @@ export default function HomeScreen() {
           目前 MonthView 也是全屏的，所以这个提示可以作为 Overlay。
       */}
       {viewMode === 'month' && (
-          <Animated.View pointerEvents="box-none" style={[{ position: 'absolute', bottom: 0, width: '100%' }, animatedStyle]}>
+          <Animated.View pointerEvents="box-none" style={[{ position: 'absolute', bottom: 0, width: '100%', zIndex: 10 }, animatedStyle]}>
               <BlurView intensity={20} tint="dark" style={{ borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden', flex: 1 }}>
                   <View style={{ 
                       flexDirection: 'row', 
@@ -248,7 +268,7 @@ export default function HomeScreen() {
 
                           <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginRight: 4 }}>完成</Text>
                           <View style={{ marginRight: 8 }}>
-                            <AnimatedNumber value={completedTodos} style={{ fontSize: 12, color: '#9ca3af', fontWeight: 'bold' }} />
+                            <AnimatedNumber value={completedTodos} style={{ fontSize: 12, color: '#4ade80', fontWeight: 'bold' }} />
                           </View>
 
                           <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', marginRight: 8 }}>|</Text>
@@ -327,8 +347,11 @@ export default function HomeScreen() {
             borderWidth: 1, 
             padding: 4 
         }}>
-            <TouchableOpacity style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 9999 }}>
-                <Calendar size={20} color="white" />
+            <TouchableOpacity 
+                style={{ paddingHorizontal: 16, paddingVertical: 8 }}
+                onPress={() => setSearchVisible(true)}
+            >
+                <Search size={20} color="white" />
             </TouchableOpacity>
             <TouchableOpacity style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
                 <Inbox size={20} color="white" />
@@ -350,6 +373,13 @@ export default function HomeScreen() {
         onClose={() => setSearchVisible(false)}
         todos={todos}
         onSelectTodo={handleSearchResultSelect}
+      />
+
+      <ImportExportModal 
+        visible={isImportExportVisible}
+        onClose={() => setImportExportVisible(false)}
+        onImport={handleImport}
+        onExport={handleExport}
       />
     </GestureHandlerRootView>
   );

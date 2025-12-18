@@ -1,6 +1,7 @@
+import * as Haptics from 'expo-haptics';
 import { Trash2 } from 'lucide-react-native';
 import React, { useRef } from 'react';
-import { Animated, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Share, Text, TouchableOpacity, View } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Todo } from '../../types';
 
@@ -20,6 +21,20 @@ export const TodoItem = ({ todo, onToggle, onDelete, onEdit }: TodoItemProps) =>
       onEdit(todo);
     }
     lastPress.current = now;
+  };
+
+  const handleLongPress = async () => {
+    try {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const result = await Share.share({
+        message: todo.text,
+      });
+      if (result.action === Share.sharedAction) {
+        // 分享成功（在 iOS 上，用户点击复制也算分享成功）
+      }
+    } catch (error) {
+      Alert.alert('操作失败', '无法调用系统分享');
+    }
   };
 
   const renderRightActions = (_: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>) => {
@@ -42,6 +57,7 @@ export const TodoItem = ({ todo, onToggle, onDelete, onEdit }: TodoItemProps) =>
     <Swipeable renderRightActions={renderRightActions}>
       <TouchableOpacity 
         onPress={handlePress}
+        onLongPress={handleLongPress}
         activeOpacity={1}
         style={{ 
             flexDirection: 'row', 

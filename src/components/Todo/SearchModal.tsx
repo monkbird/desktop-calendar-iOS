@@ -15,37 +15,57 @@ export const SearchModal = ({ visible, onClose, todos, onSelectTodo }: SearchMod
   const [searchResults, setSearchResults] = useState<Todo[]>([]);
   const inputRef = useRef<TextInput>(null);
   
+  const total = todos.length;
+  const completedCount = todos.filter(t => t.completed).length;
+  const uncompletedCount = total - completedCount;
+
   // 渲染控制：先展开容器，再显示内容
   const [shouldRenderContent, setShouldRenderContent] = useState(false);
+
+  const getSortedTodos = (todoList: Todo[]) => {
+      return [...todoList].sort((a, b) => {
+          // 第一优先级：按日期降序
+          const dateDiff = b.targetDate.localeCompare(a.targetDate);
+          if (dateDiff !== 0) return dateDiff;
+          
+          // 第二优先级：未完成排在已完成前面
+          // completed: false (0) -> completed: true (1)
+          // a.completed (false) - b.completed (true) = 0 - 1 = -1 (a 排在 b 前面)
+          // a.completed (true) - b.completed (false) = 1 - 0 = 1 (b 排在 a 前面)
+          return (Number(a.completed) - Number(b.completed));
+      });
+  };
 
   useEffect(() => {
     if (visible) {
       setSearchText('');
-      setSearchResults([]);
+      // 默认按日期降序显示所有待办
+      setSearchResults(getSortedTodos(todos));
       setShouldRenderContent(false);
       
       // 300ms 后显示内容（配合容器展开动画）
       const timer = setTimeout(() => {
         setShouldRenderContent(true);
         // 内容显示后聚焦
-        setTimeout(() => inputRef.current?.focus(), 50);
+        // setTimeout(() => inputRef.current?.focus(), 50); // 移除自动聚焦，避免键盘遮挡列表
       }, 300);
       
       return () => clearTimeout(timer);
     } else {
         setShouldRenderContent(false);
     }
-  }, [visible]);
+  }, [visible, todos]);
 
   useEffect(() => {
     if (!searchText.trim()) {
-        setSearchResults([]);
+        setSearchResults(getSortedTodos(todos));
         return;
     }
     const results = todos.filter(todo => 
         todo.text.toLowerCase().includes(searchText.toLowerCase())
     );
-    setSearchResults(results);
+    // 搜索结果也应用相同的排序逻辑
+    setSearchResults(getSortedTodos(results));
   }, [searchText, todos]);
 
   const handleSelect = (todo: Todo) => {
@@ -74,7 +94,7 @@ export const SearchModal = ({ visible, onClose, todos, onSelectTodo }: SearchMod
         >
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <Text style={{ color: 'white', fontSize: 18, fontWeight: '600' }}>
-              搜索待办
+              待办记录
             </Text>
             <TouchableOpacity onPress={onClose}>
                 <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 16 }}>关闭</Text>
@@ -84,6 +104,13 @@ export const SearchModal = ({ visible, onClose, todos, onSelectTodo }: SearchMod
           {/* 延迟渲染的内容区域 */}
           {shouldRenderContent ? (
               <Animated.View entering={FadeIn.duration(200)}>
+                  {/* 统计信息 */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16, backgroundColor: '#2c2c2e', padding: 12, borderRadius: 8 }}>
+                      <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>总计: {total}</Text>
+                      <Text style={{ color: '#4ade80', fontSize: 13 }}>完成: {completedCount}</Text>
+                      <Text style={{ color: '#fbbf24', fontSize: 13 }}>未完成: {uncompletedCount}</Text>
+                  </View>
+
                   <TextInput
                     ref={inputRef}
                     style={{ 
@@ -96,44 +123,45 @@ export const SearchModal = ({ visible, onClose, todos, onSelectTodo }: SearchMod
                     }}
                     value={searchText}
                     onChangeText={setSearchText}
-                    placeholder="输入关键字搜索..."
+                    placeholder="搜索待办..."
                     placeholderTextColor="rgba(255,255,255,0.3)"
                   />
                   
-                  {searchResults.length > 0 ? (
-                      <FlatList
-                          data={searchResults}
-                          keyExtractor={item => item.id}
-                          renderItem={({ item }) => (
-                              <TouchableOpacity 
-                                  onPress={() => handleSelect(item)}
-                                  style={{ 
-                                      padding: 12, 
-                                      borderBottomWidth: 0.5, 
-                                      borderBottomColor: 'rgba(255,255,255,0.1)',
-                                      flexDirection: 'row',
-                                      justifyContent: 'space-between',
-                                      alignItems: 'center'
-                                  }}
-                              >
-                                  <View style={{ flex: 1 }}>
-                                      <Text style={{ color: 'white', fontSize: 16 }} numberOfLines={1}>{item.text}</Text>
-                                      <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 4 }}>{item.targetDate}</Text>
-                                  </View>
-                                  <Text style={{ color: item.completed ? '#4ade80' : '#fbbf24', fontSize: 12 }}>
-                                      {item.completed ? '已完成' : '未完成'}
-                                  </Text>
-                              </TouchableOpacity>
-                          )}
-                          style={{ maxHeight: 300 }}
-                      />
-                  ) : (
-                      searchText.trim() ? (
+                  <FlatList
+                      data={searchResults}
+                      keyExtractor={item => item.id}
+                      keyboardShouldPersistTaps="always"
+                      keyboardDismissMode="on-drag"
+                      renderItem={({ item }) => (
+                          <TouchableOpacity 
+                              onPress={() => handleSelect(item)}
+                              style={{ 
+                                  padding: 12, 
+                                  borderBottomWidth: 0.5, 
+                                  borderBottomColor: 'rgba(255,255,255,0.1)',
+                                  flexDirection: 'row',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center'
+                              }}
+                          >
+                              <View style={{ flex: 1 }}>
+                                  <Text style={{ color: 'white', fontSize: 16 }} numberOfLines={1}>{item.text}</Text>
+                                  <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 4 }}>{item.targetDate}</Text>
+                              </View>
+                              <Text style={{ color: item.completed ? '#4ade80' : '#fbbf24', fontSize: 12 }}>
+                                  {item.completed ? '已完成' : '未完成'}
+                              </Text>
+                          </TouchableOpacity>
+                      )}
+                      style={{ maxHeight: 300 }}
+                      ListEmptyComponent={
                           <View style={{ alignItems: 'center', padding: 20 }}>
-                              <Text style={{ color: 'rgba(255,255,255,0.3)' }}>未找到相关待办</Text>
+                              <Text style={{ color: 'rgba(255,255,255,0.3)' }}>
+                                  {searchText ? '未找到相关待办' : '暂无待办记录'}
+                              </Text>
                           </View>
-                      ) : null
-                  )}
+                      }
+                  />
               </Animated.View>
           ) : (
               // 占位区域

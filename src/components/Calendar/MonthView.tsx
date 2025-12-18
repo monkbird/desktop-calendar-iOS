@@ -7,6 +7,7 @@ import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Todo } from '../../types';
 import { formatDateKey } from '../../utils';
+import { AnimatedNumber } from '../UI/AnimatedNumber';
 import { CalendarCell } from './CalendarCell';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -23,11 +24,20 @@ interface MonthViewProps {
 }
 
 
+
 // 固定头部组件
-const MonthHeader = ({ date, onBackToYear }: { date: Date, onBackToYear: (d?: Date) => void }) => {
+const MonthHeader = ({ date, onBackToYear, todos }: { date: Date, onBackToYear: (d?: Date) => void, todos: Todo[] }) => {
     const year = date.getFullYear();
     const month = date.getMonth() + 1;
     const monthChinese = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二'][month - 1];
+
+    // 计算本月完成待办数
+    const completedCount = useMemo(() => {
+        return todos.filter(t => {
+            const [tYear, tMonth] = t.targetDate.split('-').map(Number);
+            return tYear === year && tMonth === month && t.completed;
+        }).length;
+    }, [todos, year, month]);
 
     return (
         <View 
@@ -62,9 +72,17 @@ const MonthHeader = ({ date, onBackToYear }: { date: Date, onBackToYear: (d?: Da
                     </TouchableOpacity>
                 </View>
 
-                <Text style={{ fontSize: 36, fontWeight: 'bold', color: 'white', marginBottom: 16, marginLeft: 8 }}>
-                    {monthChinese}月
-                </Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 }}>
+                    <Text style={{ fontSize: 36, fontWeight: 'bold', color: 'white', marginLeft: 8 }}>
+                        {monthChinese}月
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, marginRight: 8 }}>
+                        <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>
+                            本月完成待办数：
+                        </Text>
+                        <AnimatedNumber value={completedCount} style={{ color: '#4ade80', fontWeight: 'bold', fontSize: 13 }} />
+                    </View>
+                </View>
 
                 {/* 星期表头 */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' }}>
@@ -311,7 +329,7 @@ export default function MonthView({ initialDate, selectedDate, onDateSelect, onD
 
     return (
         <View style={{ flex: 1 }}>
-            <MonthHeader date={currentViewDate} onBackToYear={onBackToYear} />
+            <MonthHeader date={currentViewDate} onBackToYear={onBackToYear} todos={todos} />
             
             {/* 占位组件：立即渲染，保证动画零延迟启动 */}
             {!isListVisible && (
