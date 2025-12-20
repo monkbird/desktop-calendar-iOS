@@ -1,16 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Modal, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, KeyboardAvoidingView, Modal, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { Easing, FadeIn, Layout, ZoomIn } from 'react-native-reanimated';
 import { Todo } from '../../types';
+import { formatDateKey } from '../../utils';
 
 interface SearchModalProps {
   visible: boolean;
   onClose: () => void;
   todos: Todo[];
   onSelectTodo: (date: string) => void;
+  onDeleteAll: () => void;
 }
 
-export const SearchModal = ({ visible, onClose, todos, onSelectTodo }: SearchModalProps) => {
+export const SearchModal = ({ visible, onClose, todos, onSelectTodo, onDeleteAll }: SearchModalProps) => {
   const [searchText, setSearchText] = useState('');
   const [searchResults, setSearchResults] = useState<Todo[]>([]);
   const inputRef = useRef<TextInput>(null);
@@ -57,20 +59,45 @@ export const SearchModal = ({ visible, onClose, todos, onSelectTodo }: SearchMod
   }, [visible, todos]);
 
   useEffect(() => {
-    if (!searchText.trim()) {
-        setSearchResults(getSortedTodos(todos));
-        return;
-    }
-    const results = todos.filter(todo => 
-        todo.text.toLowerCase().includes(searchText.toLowerCase())
-    );
-    // 搜索结果也应用相同的排序逻辑
-    setSearchResults(getSortedTodos(results));
+    const todayKey = formatDateKey(new Date());
+
+    const filtered = todos.filter(t => {
+        // 1. 文本匹配
+        if (searchText.trim() && !t.text.toLowerCase().includes(searchText.toLowerCase())) {
+            return false;
+        }
+        
+        // 2. 过滤掉未来的长期待办 (User: "对于未来生成的，统一当没有处理")
+        // 已完成的历史记录 isLongTerm 为 false，所以会被保留。
+        // 当前/过期的 active instance (isLongTerm=true) targetDate <= todayKey，也会被保留。
+        if (t.isLongTerm && t.targetDate > todayKey) {
+            return false;
+        }
+        
+        return true;
+    });
+
+    setSearchResults(getSortedTodos(filtered));
   }, [searchText, todos]);
 
   const handleSelect = (todo: Todo) => {
       onSelectTodo(todo.targetDate);
       onClose();
+  };
+
+  const handleDeleteAll = () => {
+    Alert.alert(
+        '删除全部待办',
+        '确定要删除所有待办事项吗？此操作不可恢复。',
+        [
+            { text: '取消', style: 'cancel' },
+            { 
+                text: '删除', 
+                style: 'destructive', 
+                onPress: onDeleteAll 
+            }
+        ]
+    );
   };
 
   return (
@@ -96,9 +123,14 @@ export const SearchModal = ({ visible, onClose, todos, onSelectTodo }: SearchMod
             <Text style={{ color: 'white', fontSize: 18, fontWeight: '600' }}>
               待办记录
             </Text>
-            <TouchableOpacity onPress={onClose}>
-                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 16 }}>关闭</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                <TouchableOpacity onPress={handleDeleteAll}>
+                    <Text style={{ color: '#ef4444', fontSize: 16 }}>全部删除</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={onClose}>
+                    <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 16 }}>关闭</Text>
+                </TouchableOpacity>
+            </View>
           </View>
           
           {/* 延迟渲染的内容区域 */}

@@ -8,6 +8,16 @@ export interface Todo {
   completedAt?: number;
   createdAt?: number;
   updatedAt?: number;
+  
+  // New fields for long-term and scheduling
+  isLongTerm?: boolean;
+  startDate?: string; // ISO string
+  endDate?: string;   // ISO string
+  isAllDay?: boolean;
+  isAllYear?: boolean;
+  isMonth?: boolean;
+  repeat?: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+  isPinned?: boolean;
 }
 
 export type SyncActionType = 'INSERT' | 'UPDATE' | 'DELETE';

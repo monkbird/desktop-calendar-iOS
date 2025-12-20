@@ -1,14 +1,15 @@
 import { BlurView } from 'expo-blur';
 import { FileSpreadsheet, Inbox, Plus, Search } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Alert, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { Easing, FadeIn, FadeOut, Keyframe, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import MonthView from '../src/components/Calendar/MonthView';
 import YearView from '../src/components/Calendar/YearView';
+import DateSelectionModal from '../src/components/Todo/DateSelectionModal';
+import { DraggableTodoList } from '../src/components/Todo/DraggableTodoList';
 import { ImportExportModal } from '../src/components/Todo/ImportExportModal';
 import { SearchModal } from '../src/components/Todo/SearchModal';
-import { TodoItem } from '../src/components/Todo/TodoItem';
 import { TodoModal } from '../src/components/Todo/TodoModal';
 import { AnimatedNumber } from '../src/components/UI/AnimatedNumber';
 import { useTodos } from '../src/hooks/useTodos';
@@ -38,7 +39,7 @@ const CloseYearEnter = new Keyframe({
 });
 
 export default function HomeScreen() {
-  const { todos, addTodo, toggleTodo, updateTodo, deleteTodo, importTodos } = useTodos();
+  const { todos, addTodo, toggleTodo, updateTodo, updateTodoFields, deleteTodo, deleteAllTodos, reorderTodos, importTodos } = useTodos();
   const [viewMode, setViewMode] = useState<'year' | 'month'>('month');
   
   // currentDate 控制视图显示的月份/年份
@@ -53,6 +54,7 @@ export default function HomeScreen() {
   // 当前视图的周数（用于自适应高度）
   const [weekCount, setWeekCount] = useState(5);
 
+
   const animatedStyle = useAnimatedStyle(() => {
     return {
       top: withTiming(560 + (weekCount - 5) * 65, {
@@ -63,9 +65,47 @@ export default function HomeScreen() {
   }, [weekCount]);
 
   const selectedDateKey = formatDateKey(selectedDate);
+  // 获取今天的日期 Key，用于过滤逻辑
+  const todayKey = formatDateKey(new Date());
+
   const selectedTodos = todos
-    .filter(t => t.targetDate === selectedDateKey)
-    .sort((a, b) => Number(a.completed) - Number(b.completed));
+    .reduce<Todo[]>((acc, t) => {
+        // 0. 特殊过滤：已完成的长期待办，只显示在完成日期当天
+        // (注意：新的逻辑中，完成的长期待办会生成一个 isLongTerm=false 的历史记录，所以这里的 checks 可能不再需要，
+        // 但为了兼容旧数据或防止逻辑遗漏，保留也无妨。不过根据新逻辑，完成的 repeating todo 会被重置为未完成并推到下个月，
+        // 同时生成一个 isLongTerm=false 的副本。所以 t.isLongTerm && t.completed 的情况应该不存在了（除非是 AllYear/Month？）)
+        // 让我们先保留基本的 targetDate 匹配逻辑。
+
+        // 1. 全年/全月 特殊逻辑 (已移除，根据用户需求，长期待办只显示在 targetDate)
+                // 之前的逻辑会强制显示在 1 月 1 日或每月 1 日，这与 "Start/End Date" 的精确控制冲突。
+                // 现在的 useTodos 钩子已经完善了 targetDate 的自动顺延和周期跳转逻辑，
+                // 所以直接依赖下面的 targetDate 匹配即可。
+
+        // 2. 通用匹配逻辑 (Normal + Repeating + LongTerm Range)
+        // 现在重复待办由 useTodos 自动维护 targetDate (自动顺延/自动跳转下个月)，
+        // 所以我们只需要匹配 targetDate 即可。不再需要投影计算。
+        // 这也符合 "For future generated, treat as not existing" (因为 targetDate 还没到)
+        // 以及 "Uncompleted defers" (targetDate 会随 performMigration 变更为 Today)
+        
+        if (t.targetDate === selectedDateKey) {
+            acc.push(t);
+        }
+        
+        return acc;
+    }, [])
+    .sort((a, b) => {
+        // 1. Completed status (Uncompleted first)
+        const aCompleted = Number(a.completed);
+        const bCompleted = Number(b.completed);
+        if (aCompleted !== bCompleted) return aCompleted - bCompleted;
+
+        // 2. Pinned status (Pinned first)
+        const aPinned = a.isPinned ? 1 : 0;
+        const bPinned = b.isPinned ? 1 : 0;
+        if (aPinned !== bPinned) return bPinned - aPinned;
+
+        return 0;
+    });
 
   const totalTodos = selectedTodos.length;
   const completedTodos = selectedTodos.filter(t => t.completed).length;
@@ -77,6 +117,9 @@ export default function HomeScreen() {
   const [isSearchVisible, setSearchVisible] = useState(false);
   const [isImportExportVisible, setImportExportVisible] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+
+  const [dateSelectionModalVisible, setDateSelectionModalVisible] = useState(false);
+  const [dateSelectionTodoId, setDateSelectionTodoId] = useState<string | null>(null);
 
   const handleSearchResultSelect = (dateString: string) => {
       // 解析日期 YYYY-MM-DD
@@ -147,6 +190,33 @@ export default function HomeScreen() {
           Alert.alert('导入失败', String(e));
       }
   };
+
+  const handleStarTodo = (todo: Todo) => {
+    setDateSelectionTodoId(todo.id);
+    setDateSelectionModalVisible(true);
+  };
+
+  const handlePinTodo = (todo: Todo) => {
+      updateTodoFields(todo.id, { isPinned: !todo.isPinned });
+  };
+
+  const handleDateSelectionSave = (data: { startDate: string; endDate: string; isAllDay: boolean; isAllYear: boolean; isMonth: boolean }) => {
+    const { startDate, endDate, isAllDay, isAllYear, isMonth } = data;
+    if (dateSelectionTodoId) {
+        updateTodoFields(dateSelectionTodoId, {
+            isLongTerm: true,
+            startDate,
+            endDate,
+            isAllDay,
+            isAllYear,
+            isMonth
+        });
+    }
+    setDateSelectionModalVisible(false);
+    setDateSelectionTodoId(null);
+  };
+
+  const selectedTodoForModal = todos.find(t => t.id === dateSelectionTodoId);
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: 'black' }}>
@@ -284,23 +354,15 @@ export default function HomeScreen() {
                         exiting={FadeOut.duration(400)}
                         style={[StyleSheet.absoluteFill]}
                     >
-                      {selectedTodos.length > 0 ? (
-                          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
-                              {selectedTodos.map(todo => (
-                                  <TodoItem 
-                                      key={todo.id} 
-                                      todo={todo} 
-                                      onToggle={toggleTodo} 
-                                      onDelete={deleteTodo}
-                                      onEdit={handleEditTodo}
-                                  />
-                              ))}
-                          </ScrollView>
-                      ) : (
-                          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 40 }}>
-                              <Text style={{ color: 'rgba(255,255,255,0.3)', fontWeight: '500', fontSize: 18 }}>无待办</Text>
-                          </View>
-                      )}
+                      <DraggableTodoList 
+                          todos={selectedTodos}
+                          onToggle={toggleTodo} 
+                          onDelete={deleteTodo}
+                          onEdit={handleEditTodo}
+                          onStar={handleStarTodo}
+                          onPin={handlePinTodo}
+                          onReorder={reorderTodos}
+                      />
                     </Animated.View>
                   </View>
               </BlurView>
@@ -359,6 +421,13 @@ export default function HomeScreen() {
         </View>
       </View>
       
+      <DateSelectionModal 
+        visible={dateSelectionModalVisible}
+        onClose={() => setDateSelectionModalVisible(false)}
+        onSave={handleDateSelectionSave}
+        todo={selectedTodoForModal}
+      />
+
       <TodoModal 
         visible={isModalVisible}
         onClose={() => setModalVisible(false)}
@@ -373,6 +442,7 @@ export default function HomeScreen() {
         onClose={() => setSearchVisible(false)}
         todos={todos}
         onSelectTodo={handleSearchResultSelect}
+        onDeleteAll={deleteAllTodos}
       />
 
       <ImportExportModal 

@@ -312,9 +312,46 @@ export default function MonthView({ initialDate, selectedDate, onDateSelect, onD
 
     const todosMap = useMemo(() => {
         const map: Record<string, Todo[]> = {};
+        const todayKey = formatDateKey(new Date());
+        
         todos.forEach(t => {
-            if (!map[t.targetDate]) map[t.targetDate] = [];
-            map[t.targetDate].push(t);
+            // 计算完成日期的 Key
+            const completionKey = t.completed && t.completedAt ? formatDateKey(new Date(t.completedAt)) : null;
+
+            const add = (dateStr: string) => {
+                // 如果是未完成的长期待办，不显示今天之前的点
+                // (虽然 performMigration 会把 targetDate 移到今天，但为了保险起见)
+                if (t.isLongTerm && !t.completed && dateStr < todayKey) {
+                    return;
+                }
+
+                if (!map[dateStr]) map[dateStr] = [];
+                // 避免重复
+                if (!map[dateStr].find(existing => existing.id === t.id)) {
+                    map[dateStr].push(t);
+                }
+            };
+
+            // 1. 已完成：显示在完成日期 (或 targetDate)
+            if (t.completed) {
+                if (completionKey) {
+                    add(completionKey);
+                } else {
+                    add(t.targetDate);
+                }
+                // 已完成的不需要显示范围/重复，直接返回
+                return;
+            }
+
+            // 2. 未完成：显示在 targetDate (当前活动日期)
+            // 无论是普通待办、还是自动顺延的长期待办，targetDate 都是其显示的锚点
+            add(t.targetDate);
+
+            // 3. 特殊长期待办 (全年/全月)
+            // 根据用户最新需求："Limit long-term todo dots to the start date of each cycle (no range display)."
+            // 且 "Future generated treat as not existing".
+            // 现在的 useTodos 已经处理了 targetDate 的顺延，所以只需要上面的 add(t.targetDate) 即可。
+            // 原先的 range display 逻辑已移除。
         });
         return map;
     }, [todos]);
