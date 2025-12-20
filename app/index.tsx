@@ -318,10 +318,10 @@ export default function HomeScreen() {
                               {dateInfo.fullLunar}
                           </Text>
                           {(dateInfo.term || dateInfo.festival) ? (
-                              <Text style={{ color: '#f87171', fontSize: 12 }}>
-                                  {dateInfo.festival || dateInfo.term}
-                              </Text>
-                          ) : null}
+                            <Text style={{ color: '#f87171', fontSize: 10, flexShrink: 1 }}>
+                                {dateInfo.festival || dateInfo.term}
+                            </Text>
+                        ) : null}
                       </View>
 
                       {/* 中间分隔线 */}
