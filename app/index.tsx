@@ -318,10 +318,21 @@ export default function HomeScreen() {
                               {dateInfo.fullLunar}
                           </Text>
                           {(dateInfo.term || dateInfo.festival) ? (
-                            <Text style={{ color: '#f87171', fontSize: 10, flexShrink: 1 }}>
-                                {dateInfo.festival || dateInfo.term}
-                            </Text>
-                        ) : null}
+                              <Text style={{ 
+                                  color: '#f87171', 
+                                  fontSize: (dateInfo.festival || dateInfo.term).length >= 6 ? 10 : 12,
+                                  lineHeight: (dateInfo.festival || dateInfo.term).length >= 6 ? 12 : undefined
+                              }}>
+                                  {(() => {
+                                      const text = dateInfo.festival || dateInfo.term;
+                                      if (text.length >= 6) {
+                                          const mid = Math.ceil(text.length / 2);
+                                          return text.slice(0, mid) + '\n' + text.slice(mid);
+                                      }
+                                      return text;
+                                  })()}
+                              </Text>
+                          ) : null}
                       </View>
 
                       {/* 中间分隔线 */}
